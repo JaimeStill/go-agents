@@ -1,0 +1,22 @@
+{
+  "name": "vision-agent",
+  "transport": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "gemma3:4b",
+        "format": "openai-standard",
+        "options": {
+          "max_tokens": 4096,
+          "temperature": 0.7
+        }
+      }
+    },
+    "timeout": 24000000000,
+    "max_retries": 3,
+    "retry_backoff_base": 1000000000,
+    "connection_pool_size": 10,
+    "connection_timeout": 9000000000
+  }
+}

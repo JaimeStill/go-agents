@@ -1,0 +1,21 @@
+{
+  "name": "embeddings-agent",
+  "transport": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "embeddinggemma:300m",
+        "format": "openai-embeddings",
+        "options": {
+          "dimensions": 768
+        }
+      }
+    },
+    "timeout": 24000000000,
+    "max_retries": 3,
+    "retry_backoff_base": 1000000000,
+    "connection_pool_size": 10,
+    "connection_timeout": 6000000000
+  }
+}

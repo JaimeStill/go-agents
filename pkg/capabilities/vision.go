@@ -1,0 +1,112 @@
+package capabilities
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/JaimeStill/go-agents/pkg/protocols"
+)
+
+type VisionCapability struct {
+	*StandardStreamingCapability
+}
+
+func NewVisionCapability(name string, options []CapabilityOption) *VisionCapability {
+	return &VisionCapability{
+		StandardStreamingCapability: NewStandardStreamingCapability(
+			name,
+			protocols.Vision,
+			options,
+		),
+	}
+}
+
+func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+	options, err := c.ProcessOptions(req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := c.ProcessImages(req.Messages, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options["model"] = model.Name()
+
+	return &protocols.Request{
+		Messages: messages,
+		Options:  options,
+	}, nil
+}
+
+func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+	options, err := c.ProcessOptions(req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := c.ProcessImages(req.Messages, options)
+	if err != nil {
+		return nil, err
+	}
+
+	options["model"] = model.Name()
+	options["stream"] = true
+
+	return &protocols.Request{
+		Messages: messages,
+		Options:  options,
+	}, nil
+}
+
+func (c *VisionCapability) ProcessImages(messages []protocols.Message, options map[string]any) ([]protocols.Message, error) {
+	images, ok := options["images"].([]any)
+	if !ok || len(images) == 0 {
+		return nil, fmt.Errorf("images must be a non-empty array")
+	}
+
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("messages cannot be empty for vision requests")
+	}
+
+	idx := len(messages) - 1
+	message := &messages[idx]
+
+	if message.Role != "user" {
+		return nil, fmt.Errorf("last message must be from user for vision requests")
+	}
+
+	content := []map[string]any{
+		{"type": "text", "text": message.Content},
+	}
+
+	for _, img := range images {
+		if imgStr, ok := img.(string); ok {
+			detail := protocols.ExtractOption(options, "detail", "auto")
+			content = append(content, map[string]any{
+				"type": "image_url",
+				"image_url": map[string]any{
+					"url":    imgStr,
+					"detail": detail,
+				},
+			})
+		}
+	}
+
+	messages[idx] = protocols.Message{
+		Role:    message.Role,
+		Content: content,
+	}
+
+	return messages, nil
+}
+
+func (c *VisionCapability) ParseResponse(data []byte) (any, error) {
+	var response protocols.ChatResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}

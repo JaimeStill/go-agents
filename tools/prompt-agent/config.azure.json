@@ -1,0 +1,27 @@
+{
+  "name": "azure-key-agent",
+  "system_prompt": "You are an expert software architect specializing in cloud native systems design",
+  "transport": {
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "model": {
+        "name": "o3-mini",
+        "format": "openai-reasoning",
+        "options": {
+          "max_completion_tokens": 4096
+        }
+      },
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "timeout": 24000000000,
+    "max_retries": 3,
+    "retry_backoff_base": 1000000000,
+    "connection_pool_size": 10,
+    "connection_timeout": 9000000000
+  }
+}
