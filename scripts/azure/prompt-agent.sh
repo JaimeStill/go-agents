@@ -5,7 +5,7 @@ curl -X POST https://eastus.api.cognitive.microsoft.com/openai/deployments/o3-mi
     "messages": [
       {              
         "role": "user",                                                                           
-        "content": "How do you feel about being integrated into an agentic toolkit written in Go?"
+        "content": "How do you feel about being integrated into an agentic system written in Go?"
       }
     ],                              
     "max_completion_tokens": 100000,
