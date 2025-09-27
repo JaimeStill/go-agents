@@ -60,31 +60,6 @@ go run tools/prompt-agent/main.go \
   -stream # optional, removing will process all at once and return
 ```
 
-```
-Go (also known as Golang) is a statically typed, compiled, designed-for-concurrency programming language developed by Google. Its primary design goals include simplicity, performance, reliability, and ease of use.
-
-**Key Features:**
-
-1. **Concurrency**: Go's concurrency model uses lightweight goroutines, which can run concurrently without the need for explicit thread management.
-2. **Simple syntax**: Go's syntax is designed to be concise and easy to read, with a focus on simplicity over complexity.
-3. **Statically typed**: Go is statically typed, which means type errors are caught at compile-time rather than runtime.
-4. **Compiled language**: Go code is compiled into machine code, making it faster and more efficient than interpreted languages.
-
-**Language Design Philosophy:**
-
-1. **Consistency**: Go aims to be consistent in its behavior and syntax, making it easier for developers to learn and use.
-2. **Composability**: Go encourages modular programming through the use of packages and interfaces.
-3. **Error handling**: Go's error handling system is designed to be explicit and easy to use.
-
-**Use Cases:**
-
-1. **Cloud native applications**: Go is well-suited for building cloud-native applications due to its concurrency model, performance, and simplicity.
-2. **Networking and distributed systems**: Go's design makes it an excellent choice for building networking and distributed systems.
-3. **Microservices architecture**: Go's modular programming model and package-based design make it a popular choice for microservices architecture.
-
-Overall, Go is a modern language that balances simplicity, performance, and concurrency, making it an attractive choice for building scalable, maintainable cloud native applications.
-```
-
 <details>
   <summary>Configuration</summary>
 
@@ -117,6 +92,31 @@ Overall, Go is a modern language that balances simplicity, performance, and conc
 
 </details>
 
+##### Output
+
+Go (also known as Golang) is a statically typed, compiled, designed-for-concurrency programming language developed by Google. Its primary design goals include simplicity, performance, reliability, and ease of use.
+
+**Key Features:**
+
+1. **Concurrency**: Go's concurrency model uses lightweight goroutines, which can run concurrently without the need for explicit thread management.
+2. **Simple syntax**: Go's syntax is designed to be concise and easy to read, with a focus on simplicity over complexity.
+3. **Statically typed**: Go is statically typed, which means type errors are caught at compile-time rather than runtime.
+4. **Compiled language**: Go code is compiled into machine code, making it faster and more efficient than interpreted languages.
+
+**Language Design Philosophy:**
+
+1. **Consistency**: Go aims to be consistent in its behavior and syntax, making it easier for developers to learn and use.
+2. **Composability**: Go encourages modular programming through the use of packages and interfaces.
+3. **Error handling**: Go's error handling system is designed to be explicit and easy to use.
+
+**Use Cases:**
+
+1. **Cloud native applications**: Go is well-suited for building cloud-native applications due to its concurrency model, performance, and simplicity.
+2. **Networking and distributed systems**: Go's design makes it an excellent choice for building networking and distributed systems.
+3. **Microservices architecture**: Go's modular programming model and package-based design make it a popular choice for microservices architecture.
+
+Overall, Go is a modern language that balances simplicity, performance, and concurrency, making it an attractive choice for building scalable, maintainable cloud native applications.
+
 #### Test with Azure API Key
 
 ```sh
@@ -129,16 +129,6 @@ go run tools/prompt-agent/main.go \
   -token $AZURE_API_KEY \
   -prompt "In 300 words or less, describe Kubernetes" \
   -stream
-```
-
-```
-Kubernetes, often abbreviated as K8s, is an open-source container orchestration platform designed to automate the deployment, scaling, and management of containerized applications. It abstracts the underlying infrastructure by organizing containers into the smallest deployable units called pods, which run on nodes (servers) grouped into clusters.
-
-At its core, Kubernetes uses a declarative configuration model, allowing developers to define the desired state of their applications through configuration files. The system then continuously works to ensure that the actual state matches the desired one, providing self-healing capabilities such as automatic restarts, rescheduling of failed containers, and load balancing.
-
-Key features include automated rollouts and rollbacks, horizontal scaling, service discovery, and management of persistent storage. Kubernetes also supports advanced networking policies and security configurations, making it a robust platform for managing microservices architectures. Its API-driven design enables seamless integrations with other cloud-native tools and services, fostering a vibrant ecosystem of extensions and custom controllers.
-
-By decoupling application logic from infrastructure concerns, Kubernetes provides a consistent environment across different deployment landscapes—whether on public clouds, on-premises data centers, or hybrid environments. This flexibility, along with its community-driven evolution and support from major cloud providers, has made Kubernetes the de facto standard for orchestrating containerized applications in modern cloud-native environments.
 ```
 
 <details>
@@ -176,6 +166,16 @@ By decoupling application logic from infrastructure concerns, Kubernetes provide
 
 </details>
 
+##### Output
+
+Kubernetes, often abbreviated as K8s, is an open-source container orchestration platform designed to automate the deployment, scaling, and management of containerized applications. It abstracts the underlying infrastructure by organizing containers into the smallest deployable units called pods, which run on nodes (servers) grouped into clusters.
+
+At its core, Kubernetes uses a declarative configuration model, allowing developers to define the desired state of their applications through configuration files. The system then continuously works to ensure that the actual state matches the desired one, providing self-healing capabilities such as automatic restarts, rescheduling of failed containers, and load balancing.
+
+Key features include automated rollouts and rollbacks, horizontal scaling, service discovery, and management of persistent storage. Kubernetes also supports advanced networking policies and security configurations, making it a robust platform for managing microservices architectures. Its API-driven design enables seamless integrations with other cloud-native tools and services, fostering a vibrant ecosystem of extensions and custom controllers.
+
+By decoupling application logic from infrastructure concerns, Kubernetes provides a consistent environment across different deployment landscapes—whether on public clouds, on-premises data centers, or hybrid environments. This flexibility, along with its community-driven evolution and support from major cloud providers, has made Kubernetes the de facto standard for orchestrating containerized applications in modern cloud-native environments.
+
 #### Test with Azure Entra Auth
 
 ```sh
@@ -190,13 +190,6 @@ go run tools/prompt-agent/main.go \
   -stream
 ```
 
-```
-OAuth (Open Authorization) is an open standard for delegated authorization. It enables third-party applications to access user resources on a service without requiring users to share their credentials. Instead, the user grants a permission token (access token) that defines what resources the application can access, and for how long. OAuth focuses solely on resource authorization, not user identity verification.
-
-OIDC (OpenID Connect) builds on OAuth 2.0 by introducing an additional layer for user authentication. While OAuth provides secure authorization for resource access, OIDC adds the means to verify a user's identity. It does this through an ID token—a JSON Web Token (JWT) that carries information about the user and the authentication event. OIDC simplifies user login and enables applications to obtain basic user profile information, ensuring that the user is who they claim to be.
-
-In summary, OAuth is primarily used to grant limited access to user data without exposing login credentials, making it ideal for authorizing actions like posting on social media or accessing personal data. In contrast, OIDC is perfect for scenarios where both authentication (verifying the user's identity) and authorization (granting permission to access resources) are needed. Together, they allow modern applications to securely manage access and provide a streamlined user experience by reducing the need for additional credentials.
-```
 
 <details>
   <summary>Configuration</summary>
@@ -233,6 +226,14 @@ In summary, OAuth is primarily used to grant limited access to user data without
 
 </details>
 
+##### Output
+
+OAuth (Open Authorization) is an open standard for delegated authorization. It enables third-party applications to access user resources on a service without requiring users to share their credentials. Instead, the user grants a permission token (access token) that defines what resources the application can access, and for how long. OAuth focuses solely on resource authorization, not user identity verification.
+
+OIDC (OpenID Connect) builds on OAuth 2.0 by introducing an additional layer for user authentication. While OAuth provides secure authorization for resource access, OIDC adds the means to verify a user's identity. It does this through an ID token—a JSON Web Token (JWT) that carries information about the user and the authentication event. OIDC simplifies user login and enables applications to obtain basic user profile information, ensuring that the user is who they claim to be.
+
+In summary, OAuth is primarily used to grant limited access to user data without exposing login credentials, making it ideal for authorizing actions like posting on social media or accessing personal data. In contrast, OIDC is perfect for scenarios where both authentication (verifying the user's identity) and authorization (granting permission to access resources) are needed. Together, they allow modern applications to securely manage access and provide a streamlined user experience by reducing the need for additional credentials.
+
 See [scripts/azure/README.md](./scripts/azure/README.md) for full documentation on Azure scripts.
 
 #### Vision Protocol (Local Image)
@@ -246,9 +247,41 @@ go run tools/prompt-agent/main.go \
   -stream
 ```
 
+<details>
+  <summary>Configuration</summary>
+
+  ```json
+  {
+    "name": "gemma-vision-agent",
+    "system_prompt": "You are a helpful assistant with vision capabilities.",
+    "transport": {
+      "provider": {
+        "name": "ollama",
+        "base_url": "http://localhost:11434",
+        "model": {
+          "name": "llama3.2-vision:11b",
+          "format": "openai-standard",
+          "options": {
+            "max_tokens": 4096,
+            "temperature": 0.7
+          }
+        }
+      },
+      "timeout": 24000000000,
+      "max_retries": 3,
+      "retry_backoff_base": 1000000000,
+      "connection_pool_size": 10,
+      "connection_timeout": 9000000000
+    }
+  }
+  ```
+
+</details>
+
 ![monks-journey](https://w.wallhaven.cc/full/39/wallhaven-396dp9.jpg)
 
-```
+##### Output
+
 Here's a detailed description of the image:
 
 **Overall Impression:**
@@ -273,6 +306,16 @@ The image is a striking and surreal digital painting that evokes a sense of anci
 * **Mood:**  The overall mood is contemplative and slightly melancholic. It suggests themes of peace, time, and the impermanence of things. It feels like a place of quiet reflection and ancient wisdom.
 
 Do you want me to focus on a specific aspect of the image, such as the symbolism or the artistic techniques used?
+
+#### Vision Protocol (Web URL)
+
+```sh
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.gemma.json \
+  -protocol vision \
+  -images https://ollama.com/public/ollama.png \
+  -prompt "Provide a comprehensive description of this image" \
+  -stream
 ```
 
 <details>
@@ -306,20 +349,10 @@ Do you want me to focus on a specific aspect of the image, such as the symbolism
 
 </details>
 
-#### Vision Protocol (Web URL)
-
-```sh
-go run tools/prompt-agent/main.go \
-  -config tools/prompt-agent/config.gemma.json \
-  -protocol vision \
-  -images https://ollama.com/public/ollama.png \
-  -prompt "Provide a comprehensive description of this image" \
-  -stream
-```
-
 ![ollama](https://ollama.com/public/ollama.png)
 
-```
+##### Output
+
 Here's a comprehensive description of the image:
 
 **Overall Impression:**
@@ -337,38 +370,6 @@ The image is a simple, cartoon-style illustration of a llama. It's rendered in b
 **Overall Aesthetic:** The image has a friendly and approachable feel due to its simple design and cute character.
 
 Do you want me to analyze any specific aspect of the image in more detail?
-```
-
-<details>
-  <summary>Configuration</summary>
-
-  ```json
-  {
-    "name": "gemma-vision-agent",
-    "system_prompt": "You are a helpful assistant with vision capabilities.",
-    "transport": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "llama3.2-vision:11b",
-          "format": "openai-standard",
-          "options": {
-            "max_tokens": 4096,
-            "temperature": 0.7
-          }
-        }
-      },
-      "timeout": 24000000000,
-      "max_retries": 3,
-      "retry_backoff_base": 1000000000,
-      "connection_pool_size": 10,
-      "connection_timeout": 9000000000
-    }
-  }
-  ```
-
-</details>
 
 #### Embeddings Protocol
 
@@ -377,20 +378,6 @@ go run tools/prompt-agent/main.go \
   -config tools/prompt-agent/config.embedding.json \
   -protocol embeddings \
   -prompt "The quick brown fox jumps over the lazy dog"
-```
-
-```
-Input: "The quick brown fox jumps over the lazy dog"
-
-Generated 1 embedding(s):
-
-Embedding [0]:
-  Dimensions: 768
-  Values: [-0.163660, 0.000575, 0.048880, -0.016126, -0.029346, ..., -0.009430, -0.012544, 0.006529, -0.025449, -0.004286]
-  Statistics: min=-0.174384, max=0.257713, mean=0.000025
-  Index: 0
-
-Token Usage: 9 total
 ```
 
 <details>
@@ -422,6 +409,22 @@ Token Usage: 9 total
   ```
 
 </details>
+
+##### Output
+
+```
+Input: "The quick brown fox jumps over the lazy dog"
+
+Generated 1 embedding(s):
+
+Embedding [0]:
+  Dimensions: 768
+  Values: [-0.163660, 0.000575, 0.048880, -0.016126, -0.029346, ..., -0.009430, -0.012544, 0.006529, -0.025449, -0.004286]
+  Statistics: min=-0.174384, max=0.257713, mean=0.000025
+  Index: 0
+
+Token Usage: 9 total
+```
 
 ### Configuration
 
