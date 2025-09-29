@@ -142,8 +142,8 @@ func (s *StandardStreamingCapability) ParseStreamingChunk(data []byte) (*protoco
 	line := string(data)
 
 	// Handle Server-Sent Events format
-	if strings.HasPrefix(line, "data: ") {
-		line = strings.TrimPrefix(line, "data: ")
+	if after, ok := strings.CutPrefix(line, "data: "); ok {
+		line = after
 	}
 
 	// Skip empty lines or [DONE] markers

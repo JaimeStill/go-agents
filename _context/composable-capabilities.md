@@ -38,13 +38,14 @@ This prevents the flexibility needed for real-world model capabilities and provi
 
 ## Architecture Approach
 
-Transform from ModelFormat-centric bundling to Protocol-centric capability composition, where:
+Transform from ModelFormat-centric bundling to composable capability configuration, where:
 
-1. **Individual Capability Formats**: Each protocol has its own capability format implementation
-2. **Explicit Protocol Declaration**: Models explicitly declare which protocols they support
-3. **Protocol-Specific Options**: Each protocol has isolated options preventing contamination
-4. **Composable Architecture**: Mix and match capability formats as needed
-5. **Provider-Agnostic Capabilities**: Capability formats represent API standards, not providers
+1. **Capability Format Registration**: Each capability implementation is registered as a named format
+2. **Stateless Capabilities**: Capabilities remain pure protocol behavior implementations
+3. **Stateful Protocol Handlers**: ProtocolHandlers manage capability + options state
+4. **Explicit Protocol Fields**: Models have explicit fields for each protocol's handler
+5. **Configuration-Driven Composition**: Models compose capabilities by specifying format names in configuration
+6. **Dynamic Option Updates**: Protocol options can be updated on live models for long-lived agents
 
 ### Architectural Transformation
 
@@ -55,28 +56,14 @@ ModelFormat → [Chat, Vision, Tools, Embeddings] → Mixed Options
 
 **New Architecture**:
 ```
-Model → Protocol Configurations → Individual Capability Formats
+Configuration → Capability Format Names → Registry → Capability Instances
+            ↓
+Model → ProtocolHandlers → Stateless Capabilities + Stateful Options
       → Isolated Options per Protocol
 ```
 
-### Configuration Evolution
+### Configuration Structure
 
-**Current Configuration**:
-```json
-{
-  "model": {
-    "name": "llama3.2:3b",
-    "format": "openai-standard",
-    "options": {
-      "max_tokens": 4096,
-      "temperature": 0.7,
-      "top_p": 0.95
-    }
-  }
-}
-```
-
-**New Configuration**:
 ```json
 {
   "model": {
@@ -106,32 +93,44 @@ Model → Protocol Configurations → Individual Capability Formats
 Benefits:
 - `top_p` only passed to chat protocol (supports it)
 - `tool_choice` only passed to tools protocol (needs it)
-- Vision and embeddings implicitly not supported (not configured)
+- Vision and embeddings are nil (not configured)
 - Each protocol has isolated, validated options
+- Clear which capability format implements each protocol
+- Options can be updated dynamically for long-lived agents
 
 ## Implementation Strategy
 
-### Phase Structure
+### Design Principles
 
-**Preparation Phase**: Refactor capability system architecture without changing external interfaces
-- Create capability format registry
-- Implement standalone capability formats
-- Update internal capability selection logic
+This refactor maintains the existing capability infrastructure while enabling flexible composition:
 
-**Feature Phase**: Switch model definition to capability composition
-- Update model structure and configuration
-- Modify transport layer routing
-- Update agent interface and CLI tools
+1. **Preserve Working Code**: The existing `pkg/capabilities/` package works well - we keep the Capability interface intact
+2. **Registry Pattern**: Add capability format registration without changing capability implementations
+3. **Stateless Capabilities**: Capabilities remain pure protocol behavior definitions
+4. **Stateful Handlers**: ProtocolHandlers manage capability state and options
+5. **Explicit Protocol Fields**: Model has dedicated fields for each protocol's handler
+6. **Configuration-Driven**: Format selection happens in configuration
+7. **Clean Removal**: Remove ModelFormat layer entirely
+8. **Bottom-Up Refactoring**: Follow package dependency hierarchy from low to high level
 
-This approach prevents mixing architectural changes with interface modifications, reducing complexity and debugging difficulty.
+### Package Dependency Order
+
+Refactoring proceeds from lowest-level to highest-level packages:
+
+1. `pkg/capabilities` - Add registry for capability formats
+2. `pkg/config` - Configuration structures for capability composition
+3. `pkg/models` - Transform from format-based to protocol handler composition
+4. `pkg/providers` - Minor updates for capability selection
+5. `pkg/transport` - Update option handling for protocol-specific options
+6. `pkg/agent` - No changes needed
 
 ## Step-by-Step Implementation
 
-### Step 1: Create Capability Format Registry
+### Step 1: Create Capability Registry
 
-Create the foundation for registering individual capability formats.
+Add a registry for named capability formats without changing the existing Capability interface.
 
-#### 1.1 Create Registry Infrastructure (`pkg/capabilities/registry.go`)
+#### 1.1 Create Registry (`pkg/capabilities/registry.go`)
 
 ```go
 package capabilities
@@ -139,106 +138,63 @@ package capabilities
 import (
 	"fmt"
 	"sync"
-
-	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
-type CapabilityFormatRegistry struct {
-	mu      sync.RWMutex
-	formats map[string]CapabilityFormatFactory
+// CapabilityFactory creates instances of capabilities
+type CapabilityFactory func() Capability
+
+// capabilityRegistry manages registered capability factories
+type capabilityRegistry struct {
+	mu         sync.RWMutex
+	factories  map[string]CapabilityFactory
 }
 
-type CapabilityFormatFactory func() CapabilityFormat
-
-var globalRegistry = &CapabilityFormatRegistry{
-	formats: make(map[string]CapabilityFormatFactory),
+var registry = &capabilityRegistry{
+	factories: make(map[string]CapabilityFactory),
 }
 
-func RegisterFormat(name string, factory CapabilityFormatFactory) {
-	globalRegistry.mu.Lock()
-	defer globalRegistry.mu.Unlock()
-	globalRegistry.formats[name] = factory
+// RegisterFormat registers a capability factory with a format name
+func RegisterFormat(name string, factory CapabilityFactory) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	registry.factories[name] = factory
 }
 
-func GetFormat(name string) (CapabilityFormat, error) {
-	globalRegistry.mu.RLock()
-	defer globalRegistry.mu.RUnlock()
+// GetFormat retrieves a capability instance by format name
+func GetFormat(name string) (Capability, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
 
-	factory, exists := globalRegistry.formats[name]
+	factory, exists := registry.factories[name]
 	if !exists {
-		return nil, fmt.Errorf("capability format '%s' not found", name)
+		return nil, fmt.Errorf("capability format '%s' not registered", name)
 	}
 
 	return factory(), nil
 }
 
+// ListFormats returns all registered capability format names
 func ListFormats() []string {
-	globalRegistry.mu.RLock()
-	defer globalRegistry.mu.RUnlock()
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
 
-	names := make([]string, 0, len(globalRegistry.formats))
-	for name := range globalRegistry.formats {
+	names := make([]string, 0, len(registry.factories))
+	for name := range registry.factories {
 		names = append(names, name)
 	}
 	return names
 }
 ```
 
-#### 1.2 Define Capability Format Interface (`pkg/capabilities/format.go`)
+#### 1.2 Register Existing Capability Formats (`pkg/capabilities/init.go`)
 
 ```go
 package capabilities
 
-import (
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-type CapabilityFormat interface {
-	Name() string
-	Protocol() protocols.Protocol
-	Options() []CapabilityOption
-	ValidateOptions(options map[string]any) error
-	CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
-	CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
-	ParseResponse(data []byte) (any, error)
-	ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error)
-	IsStreamComplete(line string) bool
-}
-
-type CapabilityConfig struct {
-	Format  string         `json:"format"`
-	Options map[string]any `json:"options"`
-}
-
-type ModelCapabilities map[protocols.Protocol]CapabilityConfig
-```
-
-### Step 2: Implement Standard Capability Formats
-
-Create standalone implementations for each OpenAI API format standard.
-
-#### 2.1 OpenAI Chat Format (`pkg/capabilities/openai_chat.go`)
-
-```go
-package capabilities
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-type OpenAIChatFormat struct {
-	name    string
-	options []CapabilityOption
-}
-
-func NewOpenAIChatFormat() CapabilityFormat {
-	return &OpenAIChatFormat{
-		name: "openai-chat",
-		options: []CapabilityOption{
+func init() {
+	// Register OpenAI Chat format
+	RegisterFormat("openai-chat", func() Capability {
+		return NewChatCapability("openai-chat", []CapabilityOption{
 			{Option: "max_tokens", Required: false, DefaultValue: 4096},
 			{Option: "temperature", Required: false, DefaultValue: 0.7},
 			{Option: "top_p", Required: false, DefaultValue: nil},
@@ -246,606 +202,169 @@ func NewOpenAIChatFormat() CapabilityFormat {
 			{Option: "presence_penalty", Required: false, DefaultValue: nil},
 			{Option: "stop", Required: false, DefaultValue: nil},
 			{Option: "stream", Required: false, DefaultValue: false},
-		},
-	}
-}
+		})
+	})
 
-func (f *OpenAIChatFormat) Name() string {
-	return f.name
-}
-
-func (f *OpenAIChatFormat) Protocol() protocols.Protocol {
-	return protocols.Chat
-}
-
-func (f *OpenAIChatFormat) Options() []CapabilityOption {
-	return f.options
-}
-
-func (f *OpenAIChatFormat) ValidateOptions(options map[string]any) error {
-	accepted := make(map[string]bool)
-	required := make([]string, 0)
-
-	for _, opt := range f.options {
-		accepted[opt.Option] = true
-		if opt.Required {
-			required = append(required, opt.Option)
-		}
-	}
-
-	for key := range options {
-		if !accepted[key] {
-			return fmt.Errorf("unsupported option: %s", key)
-		}
-	}
-
-	for _, req := range required {
-		if _, provided := options[req]; !provided {
-			return fmt.Errorf("required option missing: %s", req)
-		}
-	}
-
-	return nil
-}
-
-func (f *OpenAIChatFormat) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-	options["model"] = model.Name()
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIChatFormat) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-	options["model"] = model.Name()
-	options["stream"] = true
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIChatFormat) processOptions(options map[string]any) map[string]any {
-	result := make(map[string]any)
-	for _, opt := range f.options {
-		if value, provided := options[opt.Option]; provided {
-			result[opt.Option] = value
-		} else if opt.DefaultValue != nil {
-			result[opt.Option] = opt.DefaultValue
-		}
-	}
-	return result
-}
-
-func (f *OpenAIChatFormat) ParseResponse(data []byte) (any, error) {
-	var response protocols.ChatResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, err
-	}
-	return &response, nil
-}
-
-func (f *OpenAIChatFormat) ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error) {
-	line := string(data)
-	if strings.HasPrefix(line, "data: ") {
-		line = strings.TrimPrefix(line, "data: ")
-	}
-	if line == "" || strings.Contains(line, "[DONE]") {
-		return nil, fmt.Errorf("skip line")
-	}
-
-	var chunk protocols.StreamingChunk
-	if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-		return nil, err
-	}
-	return &chunk, nil
-}
-
-func (f *OpenAIChatFormat) IsStreamComplete(line string) bool {
-	return strings.Contains(line, "[DONE]")
-}
-```
-
-#### 2.2 OpenAI Vision Format (`pkg/capabilities/openai_vision.go`)
-
-```go
-package capabilities
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-type OpenAIVisionFormat struct {
-	name    string
-	options []CapabilityOption
-}
-
-func NewOpenAIVisionFormat() CapabilityFormat {
-	return &OpenAIVisionFormat{
-		name: "openai-vision",
-		options: []CapabilityOption{
+	// Register OpenAI Vision format
+	RegisterFormat("openai-vision", func() Capability {
+		return NewVisionCapability("openai-vision", []CapabilityOption{
+			{Option: "images", Required: true, DefaultValue: nil},
 			{Option: "max_tokens", Required: false, DefaultValue: 4096},
 			{Option: "temperature", Required: false, DefaultValue: 0.7},
-			{Option: "top_p", Required: false, DefaultValue: nil},
-			{Option: "images", Required: true, DefaultValue: nil},
 			{Option: "detail", Required: false, DefaultValue: "auto"},
 			{Option: "stream", Required: false, DefaultValue: false},
-		},
-	}
-}
+		})
+	})
 
-func (f *OpenAIVisionFormat) Name() string {
-	return f.name
-}
-
-func (f *OpenAIVisionFormat) Protocol() protocols.Protocol {
-	return protocols.Vision
-}
-
-func (f *OpenAIVisionFormat) Options() []CapabilityOption {
-	return f.options
-}
-
-func (f *OpenAIVisionFormat) ValidateOptions(options map[string]any) error {
-	accepted := make(map[string]bool)
-	required := make([]string, 0)
-
-	for _, opt := range f.options {
-		accepted[opt.Option] = true
-		if opt.Required {
-			required = append(required, opt.Option)
-		}
-	}
-
-	for key := range options {
-		if !accepted[key] {
-			return fmt.Errorf("unsupported option: %s", key)
-		}
-	}
-
-	for _, req := range required {
-		if _, provided := options[req]; !provided {
-			return fmt.Errorf("required option missing: %s", req)
-		}
-	}
-
-	return nil
-}
-
-func (f *OpenAIVisionFormat) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-	messages, err := f.processImages(req.Messages, options)
-	if err != nil {
-		return nil, err
-	}
-
-	options["model"] = model.Name()
-	delete(options, "images") // Remove images from options after processing
-
-	return &protocols.Request{
-		Messages: messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIVisionFormat) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-	messages, err := f.processImages(req.Messages, options)
-	if err != nil {
-		return nil, err
-	}
-
-	options["model"] = model.Name()
-	options["stream"] = true
-	delete(options, "images") // Remove images from options after processing
-
-	return &protocols.Request{
-		Messages: messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIVisionFormat) processOptions(options map[string]any) map[string]any {
-	result := make(map[string]any)
-	for _, opt := range f.options {
-		if value, provided := options[opt.Option]; provided {
-			result[opt.Option] = value
-		} else if opt.DefaultValue != nil {
-			result[opt.Option] = opt.DefaultValue
-		}
-	}
-	return result
-}
-
-func (f *OpenAIVisionFormat) processImages(messages []protocols.Message, options map[string]any) ([]protocols.Message, error) {
-	images, ok := options["images"].([]any)
-	if !ok || len(images) == 0 {
-		return nil, fmt.Errorf("images must be a non-empty array")
-	}
-
-	if len(messages) == 0 {
-		return nil, fmt.Errorf("messages cannot be empty for vision requests")
-	}
-
-	idx := len(messages) - 1
-	message := &messages[idx]
-
-	if message.Role != "user" {
-		return nil, fmt.Errorf("last message must be from user for vision requests")
-	}
-
-	content := []map[string]any{
-		{"type": "text", "text": message.Content},
-	}
-
-	for _, img := range images {
-		if imgStr, ok := img.(string); ok {
-			detail := protocols.ExtractOption(options, "detail", "auto")
-			content = append(content, map[string]any{
-				"type": "image_url",
-				"image_url": map[string]any{
-					"url":    imgStr,
-					"detail": detail,
-				},
-			})
-		}
-	}
-
-	messages[idx] = protocols.Message{
-		Role:    message.Role,
-		Content: content,
-	}
-
-	return messages, nil
-}
-
-func (f *OpenAIVisionFormat) ParseResponse(data []byte) (any, error) {
-	var response protocols.ChatResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, err
-	}
-	return &response, nil
-}
-
-func (f *OpenAIVisionFormat) ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error) {
-	line := string(data)
-	if strings.HasPrefix(line, "data: ") {
-		line = strings.TrimPrefix(line, "data: ")
-	}
-	if line == "" || strings.Contains(line, "[DONE]") {
-		return nil, fmt.Errorf("skip line")
-	}
-
-	var chunk protocols.StreamingChunk
-	if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-		return nil, err
-	}
-	return &chunk, nil
-}
-
-func (f *OpenAIVisionFormat) IsStreamComplete(line string) bool {
-	return strings.Contains(line, "[DONE]")
-}
-```
-
-#### 2.3 OpenAI Tools Format (`pkg/capabilities/openai_tools.go`)
-
-```go
-package capabilities
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-type OpenAIToolsFormat struct {
-	name    string
-	options []CapabilityOption
-}
-
-func NewOpenAIToolsFormat() CapabilityFormat {
-	return &OpenAIToolsFormat{
-		name: "openai-tools",
-		options: []CapabilityOption{
-			{Option: "max_tokens", Required: false, DefaultValue: 4096},
-			{Option: "temperature", Required: false, DefaultValue: 0.7},
+	// Register OpenAI Tools format
+	RegisterFormat("openai-tools", func() Capability {
+		return NewToolsCapability("openai-tools", []CapabilityOption{
 			{Option: "tools", Required: true, DefaultValue: nil},
 			{Option: "tool_choice", Required: false, DefaultValue: "auto"},
+			{Option: "max_tokens", Required: false, DefaultValue: 4096},
+			{Option: "temperature", Required: false, DefaultValue: 0.7},
 			{Option: "stream", Required: false, DefaultValue: false},
-		},
-	}
-}
+		})
+	})
 
-func (f *OpenAIToolsFormat) Name() string {
-	return f.name
-}
-
-func (f *OpenAIToolsFormat) Protocol() protocols.Protocol {
-	return protocols.Tools
-}
-
-func (f *OpenAIToolsFormat) Options() []CapabilityOption {
-	return f.options
-}
-
-func (f *OpenAIToolsFormat) ValidateOptions(options map[string]any) error {
-	accepted := make(map[string]bool)
-	required := make([]string, 0)
-
-	for _, opt := range f.options {
-		accepted[opt.Option] = true
-		if opt.Required {
-			required = append(required, opt.Option)
-		}
-	}
-
-	for key := range options {
-		if !accepted[key] {
-			return fmt.Errorf("unsupported option: %s", key)
-		}
-	}
-
-	for _, req := range required {
-		if _, provided := options[req]; !provided {
-			return fmt.Errorf("required option missing: %s", req)
-		}
-	}
-
-	return nil
-}
-
-func (f *OpenAIToolsFormat) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-
-	// Validate tools format
-	if _, ok := options["tools"]; !ok {
-		return nil, fmt.Errorf("tools must be provided for tools protocol")
-	}
-
-	options["model"] = model.Name()
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIToolsFormat) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-
-	// Validate tools format
-	if _, ok := options["tools"]; !ok {
-		return nil, fmt.Errorf("tools must be provided for tools protocol")
-	}
-
-	options["model"] = model.Name()
-	options["stream"] = true
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIToolsFormat) processOptions(options map[string]any) map[string]any {
-	result := make(map[string]any)
-	for _, opt := range f.options {
-		if value, provided := options[opt.Option]; provided {
-			result[opt.Option] = value
-		} else if opt.DefaultValue != nil {
-			result[opt.Option] = opt.DefaultValue
-		}
-	}
-	return result
-}
-
-func (f *OpenAIToolsFormat) ParseResponse(data []byte) (any, error) {
-	var response protocols.ChatResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, err
-	}
-	return &response, nil
-}
-
-func (f *OpenAIToolsFormat) ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error) {
-	line := string(data)
-	if strings.HasPrefix(line, "data: ") {
-		line = strings.TrimPrefix(line, "data: ")
-	}
-	if line == "" || strings.Contains(line, "[DONE]") {
-		return nil, fmt.Errorf("skip line")
-	}
-
-	var chunk protocols.StreamingChunk
-	if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-		return nil, err
-	}
-	return &chunk, nil
-}
-
-func (f *OpenAIToolsFormat) IsStreamComplete(line string) bool {
-	return strings.Contains(line, "[DONE]")
-}
-```
-
-#### 2.4 OpenAI Embeddings Format (`pkg/capabilities/openai_embeddings.go`)
-
-```go
-package capabilities
-
-import (
-	"encoding/json"
-	"fmt"
-
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-type OpenAIEmbeddingsFormat struct {
-	name    string
-	options []CapabilityOption
-}
-
-func NewOpenAIEmbeddingsFormat() CapabilityFormat {
-	return &OpenAIEmbeddingsFormat{
-		name: "openai-embeddings",
-		options: []CapabilityOption{
+	// Register OpenAI Embeddings format
+	RegisterFormat("openai-embeddings", func() Capability {
+		return NewEmbeddingsCapability("openai-embeddings", []CapabilityOption{
 			{Option: "input", Required: true, DefaultValue: nil},
 			{Option: "dimensions", Required: false, DefaultValue: nil},
 			{Option: "encoding_format", Required: false, DefaultValue: "float"},
-		},
-	}
-}
+		})
+	})
 
-func (f *OpenAIEmbeddingsFormat) Name() string {
-	return f.name
-}
-
-func (f *OpenAIEmbeddingsFormat) Protocol() protocols.Protocol {
-	return protocols.Embeddings
-}
-
-func (f *OpenAIEmbeddingsFormat) Options() []CapabilityOption {
-	return f.options
-}
-
-func (f *OpenAIEmbeddingsFormat) ValidateOptions(options map[string]any) error {
-	accepted := make(map[string]bool)
-	required := make([]string, 0)
-
-	for _, opt := range f.options {
-		accepted[opt.Option] = true
-		if opt.Required {
-			required = append(required, opt.Option)
-		}
-	}
-
-	for key := range options {
-		if !accepted[key] {
-			return fmt.Errorf("unsupported option: %s", key)
-		}
-	}
-
-	for _, req := range required {
-		if _, provided := options[req]; !provided {
-			return fmt.Errorf("required option missing: %s", req)
-		}
-	}
-
-	return nil
-}
-
-func (f *OpenAIEmbeddingsFormat) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	if err := f.ValidateOptions(req.Options); err != nil {
-		return nil, err
-	}
-
-	options := f.processOptions(req.Options)
-	options["model"] = model.Name()
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (f *OpenAIEmbeddingsFormat) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	return nil, fmt.Errorf("streaming not supported for embeddings protocol")
-}
-
-func (f *OpenAIEmbeddingsFormat) processOptions(options map[string]any) map[string]any {
-	result := make(map[string]any)
-	for _, opt := range f.options {
-		if value, provided := options[opt.Option]; provided {
-			result[opt.Option] = value
-		} else if opt.DefaultValue != nil {
-			result[opt.Option] = opt.DefaultValue
-		}
-	}
-	return result
-}
-
-func (f *OpenAIEmbeddingsFormat) ParseResponse(data []byte) (any, error) {
-	var response protocols.EmbeddingsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, err
-	}
-	return &response, nil
-}
-
-func (f *OpenAIEmbeddingsFormat) ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error) {
-	return nil, fmt.Errorf("streaming not supported for embeddings protocol")
-}
-
-func (f *OpenAIEmbeddingsFormat) IsStreamComplete(line string) bool {
-	return false // Embeddings don't support streaming
+	// Register OpenAI Reasoning format (no temperature/top_p)
+	RegisterFormat("openai-reasoning", func() Capability {
+		return NewChatCapability("openai-reasoning", []CapabilityOption{
+			{Option: "max_completion_tokens", Required: true, DefaultValue: nil},
+			{Option: "stream", Required: false, DefaultValue: false},
+		})
+	})
 }
 ```
 
-#### 2.5 Register Standard Formats (`pkg/capabilities/init.go`)
+### Step 2: Update Configuration Package
+
+Define configuration structures to support capability composition.
+
+#### 2.1 Update Model Configuration (`pkg/config/model.go`)
 
 ```go
-package capabilities
+package config
 
-func init() {
-	// Register all standard OpenAI capability formats
-	RegisterFormat("openai-chat", func() CapabilityFormat {
-		return NewOpenAIChatFormat()
-	})
+// CapabilityConfig represents configuration for a single capability
+type CapabilityConfig struct {
+	Format  string         `json:"format"`
+	Options map[string]any `json:"options,omitempty"`
+}
 
-	RegisterFormat("openai-vision", func() CapabilityFormat {
-		return NewOpenAIVisionFormat()
-	})
+// ModelCapabilities maps protocol names to their capability configurations
+type ModelCapabilities map[string]CapabilityConfig
 
-	RegisterFormat("openai-tools", func() CapabilityFormat {
-		return NewOpenAIToolsFormat()
-	})
+// ModelConfig represents model configuration
+type ModelConfig struct {
+	Name         string            `json:"name,omitempty"`
+	Capabilities ModelCapabilities `json:"capabilities,omitempty"`
+}
 
-	RegisterFormat("openai-embeddings", func() CapabilityFormat {
-		return NewOpenAIEmbeddingsFormat()
-	})
+func DefaultModelConfig() *ModelConfig {
+	return &ModelConfig{
+		Capabilities: make(ModelCapabilities),
+	}
+}
+
+func (c *ModelConfig) Merge(source *ModelConfig) {
+	if source.Name != "" {
+		c.Name = source.Name
+	}
+
+	// Merge capabilities
+	if source.Capabilities != nil {
+		if c.Capabilities == nil {
+			c.Capabilities = make(ModelCapabilities)
+		}
+		for protocol, capConfig := range source.Capabilities {
+			c.Capabilities[protocol] = capConfig
+		}
+	}
 }
 ```
 
-### Step 3: Update Model Structure
+### Step 3: Update Model Layer
 
-Transform model definition to use capability composition instead of single format.
+Transform the model layer to use ProtocolHandlers for stateful capability management.
 
-#### 3.1 Update Model Interface (`pkg/models/model.go`)
+#### 3.1 Define ProtocolHandler (`pkg/models/handler.go`)
+
+```go
+package models
+
+import (
+	"github.com/JaimeStill/go-agents/pkg/capabilities"
+)
+
+// ProtocolHandler manages a capability instance with its configured options
+type ProtocolHandler struct {
+	capability capabilities.Capability
+	options    map[string]any
+}
+
+// NewProtocolHandler creates a new protocol handler
+func NewProtocolHandler(capability capabilities.Capability, options map[string]any) *ProtocolHandler {
+	return &ProtocolHandler{
+		capability: capability,
+		options:    copyOptions(options),
+	}
+}
+
+// Capability returns the underlying capability
+func (h *ProtocolHandler) Capability() capabilities.Capability {
+	return h.capability
+}
+
+// Options returns the configured options for this protocol
+func (h *ProtocolHandler) Options() map[string]any {
+	return h.options
+}
+
+// UpdateOptions updates the configured options (for long-lived agents)
+func (h *ProtocolHandler) UpdateOptions(newOptions map[string]any) {
+	h.options = mergeOptions(h.options, newOptions)
+}
+
+// MergeRequestOptions merges configured options with request-time options
+func (h *ProtocolHandler) MergeRequestOptions(requestOptions map[string]any) map[string]any {
+	return mergeOptions(h.options, requestOptions)
+}
+
+// Helper functions
+func copyOptions(options map[string]any) map[string]any {
+	if options == nil {
+		return make(map[string]any)
+	}
+	copied := make(map[string]any)
+	for k, v := range options {
+		copied[k] = v
+	}
+	return copied
+}
+
+func mergeOptions(base, override map[string]any) map[string]any {
+	merged := make(map[string]any)
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range override {
+		merged[k] = v
+	}
+	return merged
+}
+```
+
+#### 3.2 Update Model Interface and Implementation (`pkg/models/model.go`)
 
 ```go
 package models
@@ -854,206 +373,171 @@ import (
 	"fmt"
 
 	"github.com/JaimeStill/go-agents/pkg/capabilities"
+	"github.com/JaimeStill/go-agents/pkg/config"
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
 type Model interface {
 	Name() string
-	Capabilities() capabilities.ModelCapabilities
-	SupportsProtocol(protocol protocols.Protocol) bool
-	GetCapabilityFormat(protocol protocols.Protocol) (capabilities.CapabilityFormat, error)
-	Options(protocol protocols.Protocol) map[string]any
+
+	// Protocol support checking
+	SupportsProtocol(p protocols.Protocol) bool
+
+	// Get capability for a protocol
+	GetCapability(p protocols.Protocol) (capabilities.Capability, error)
+
+	// Get protocol-specific options
+	GetProtocolOptions(p protocols.Protocol) map[string]any
+
+	// Update protocol options (for long-lived agents)
+	UpdateProtocolOptions(p protocols.Protocol, options map[string]any) error
+
+	// Merge request options with configured options
+	MergeRequestOptions(p protocols.Protocol, requestOptions map[string]any) map[string]any
 }
 
 type model struct {
-	name         string
-	capabilities capabilities.ModelCapabilities
+	name string
+
+	// Explicit fields for each protocol's handler
+	chat       *ProtocolHandler
+	vision     *ProtocolHandler
+	tools      *ProtocolHandler
+	embeddings *ProtocolHandler
 }
 
-func New(config *ModelConfig) (Model, error) {
-	// Validate capability configurations
-	for protocol, capConfig := range config.Capabilities {
-		format, err := capabilities.GetFormat(capConfig.Format)
-		if err != nil {
-			return nil, fmt.Errorf("invalid capability format '%s' for protocol %s: %w",
-				capConfig.Format, protocol, err)
-		}
+func New(cfg *config.ModelConfig) (Model, error) {
+	m := &model{
+		name: cfg.Name,
+	}
 
-		// Validate that format matches protocol
-		if format.Protocol() != protocol {
-			return nil, fmt.Errorf("capability format '%s' is for protocol %s, not %s",
-				capConfig.Format, format.Protocol(), protocol)
+	// Initialize protocol handlers from configuration
+	for protocolName, capConfig := range cfg.Capabilities {
+		// Get capability format from registry
+		capability, err := capabilities.GetFormat(capConfig.Format)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get capability format '%s' for protocol %s: %w",
+				capConfig.Format, protocolName, err)
 		}
 
 		// Validate options for this capability
-		if err := format.ValidateOptions(capConfig.Options); err != nil {
-			return nil, fmt.Errorf("invalid options for %s protocol: %w", protocol, err)
+		if err := capability.ValidateOptions(capConfig.Options); err != nil {
+			return nil, fmt.Errorf("invalid options for %s protocol: %w", protocolName, err)
+		}
+
+		// Create protocol handler
+		handler := NewProtocolHandler(capability, capConfig.Options)
+
+		// Assign to appropriate protocol field
+		switch protocols.Protocol(protocolName) {
+		case protocols.Chat:
+			m.chat = handler
+		case protocols.Vision:
+			m.vision = handler
+		case protocols.Tools:
+			m.tools = handler
+		case protocols.Embeddings:
+			m.embeddings = handler
+		default:
+			return nil, fmt.Errorf("unknown protocol: %s", protocolName)
 		}
 	}
 
-	return &model{
-		name:         config.Name,
-		capabilities: config.Capabilities,
-	}, nil
+	return m, nil
 }
 
 func (m *model) Name() string {
 	return m.name
 }
 
-func (m *model) Capabilities() capabilities.ModelCapabilities {
-	return m.capabilities
+func (m *model) SupportsProtocol(p protocols.Protocol) bool {
+	return m.getHandler(p) != nil
 }
 
-func (m *model) SupportsProtocol(protocol protocols.Protocol) bool {
-	_, exists := m.capabilities[protocol]
-	return exists
+func (m *model) GetCapability(p protocols.Protocol) (capabilities.Capability, error) {
+	handler := m.getHandler(p)
+	if handler == nil {
+		return nil, fmt.Errorf("protocol %s not supported by model %s", p, m.name)
+	}
+	return handler.Capability(), nil
 }
 
-func (m *model) GetCapabilityFormat(protocol protocols.Protocol) (capabilities.CapabilityFormat, error) {
-	capConfig, exists := m.capabilities[protocol]
-	if !exists {
-		return nil, fmt.Errorf("protocol %s not supported by model %s", protocol, m.name)
+func (m *model) GetProtocolOptions(p protocols.Protocol) map[string]any {
+	handler := m.getHandler(p)
+	if handler == nil {
+		return make(map[string]any)
+	}
+	return handler.Options()
+}
+
+func (m *model) UpdateProtocolOptions(p protocols.Protocol, options map[string]any) error {
+	handler := m.getHandler(p)
+	if handler == nil {
+		return fmt.Errorf("protocol %s not supported by model %s", p, m.name)
 	}
 
-	format, err := capabilities.GetFormat(capConfig.Format)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get capability format '%s': %w", capConfig.Format, err)
+	// Validate new options against capability
+	if err := handler.Capability().ValidateOptions(options); err != nil {
+		return fmt.Errorf("invalid options for %s protocol: %w", p, err)
 	}
 
-	return format, nil
+	handler.UpdateOptions(options)
+	return nil
 }
 
-func (m *model) Options(protocol protocols.Protocol) map[string]any {
-	capConfig, exists := m.capabilities[protocol]
-	if !exists {
-		return make(map[string]any) // Return empty map for unsupported protocols
+func (m *model) MergeRequestOptions(p protocols.Protocol, requestOptions map[string]any) map[string]any {
+	handler := m.getHandler(p)
+	if handler == nil {
+		return requestOptions
 	}
-
-	return capConfig.Options
+	return handler.MergeRequestOptions(requestOptions)
 }
 
-type ModelConfig struct {
-	Name         string                        `json:"name"`
-	Capabilities capabilities.ModelCapabilities `json:"capabilities"`
-}
-```
-
-#### 3.2 Remove Legacy Model Formats (`pkg/models/openai.go`)
-
-Replace the existing model format functions with protocol-aware model builders:
-
-```go
-package models
-
-import (
-	"github.com/JaimeStill/go-agents/pkg/capabilities"
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-// OpenAIStandardModel creates a model with full OpenAI API capabilities
-func OpenAIStandardModel(name string) *ModelConfig {
-	return &ModelConfig{
-		Name: name,
-		Capabilities: capabilities.ModelCapabilities{
-			protocols.Chat: {
-				Format: "openai-chat",
-				Options: map[string]any{
-					"max_tokens":  4096,
-					"temperature": 0.7,
-					"top_p":       1.0,
-				},
-			},
-			protocols.Vision: {
-				Format: "openai-vision",
-				Options: map[string]any{
-					"max_tokens":  4096,
-					"temperature": 0.7,
-					"detail":      "auto",
-				},
-			},
-			protocols.Tools: {
-				Format: "openai-tools",
-				Options: map[string]any{
-					"max_tokens":  4096,
-					"temperature": 0.7,
-					"tool_choice": "auto",
-				},
-			},
-			protocols.Embeddings: {
-				Format: "openai-embeddings",
-				Options: map[string]any{
-					"encoding_format": "float",
-				},
-			},
-		},
-	}
-}
-
-// OpenAIChatModel creates a model with only chat capabilities
-func OpenAIChatModel(name string) *ModelConfig {
-	return &ModelConfig{
-		Name: name,
-		Capabilities: capabilities.ModelCapabilities{
-			protocols.Chat: {
-				Format: "openai-chat",
-				Options: map[string]any{
-					"max_tokens":  4096,
-					"temperature": 0.7,
-					"top_p":       0.95,
-				},
-			},
-		},
-	}
-}
-
-// OpenAIReasoningModel creates a model for reasoning capabilities (no temperature/top_p)
-func OpenAIReasoningModel(name string) *ModelConfig {
-	return &ModelConfig{
-		Name: name,
-		Capabilities: capabilities.ModelCapabilities{
-			protocols.Chat: {
-				Format: "openai-chat",
-				Options: map[string]any{
-					"max_completion_tokens": 4096,
-				},
-			},
-		},
+// Helper method to get protocol handler
+func (m *model) getHandler(p protocols.Protocol) *ProtocolHandler {
+	switch p {
+	case protocols.Chat:
+		return m.chat
+	case protocols.Vision:
+		return m.vision
+	case protocols.Tools:
+		return m.tools
+	case protocols.Embeddings:
+		return m.embeddings
+	default:
+		return nil
 	}
 }
 ```
+
+#### 3.3 Remove ModelFormat Files
+
+Delete the following files as they are no longer needed:
+- `pkg/models/format.go`
+- `pkg/models/registry.go`
+- `pkg/models/openai.go` (capability format registrations moved to pkg/capabilities/init.go)
 
 ### Step 4: Update Transport Layer
 
-Modify transport to work with protocol-specific capability selection.
+Modify transport to use protocol-specific options from the new model structure.
 
 #### 4.1 Update Transport Client (`pkg/transport/client.go`)
 
+Update the `ExecuteProtocol` method to use the new model interface:
+
 ```go
-// Update ExecuteProtocol method
 func (c *client) ExecuteProtocol(ctx context.Context, req *capabilities.CapabilityRequest) (any, error) {
-	// Get capability format for this protocol
-	capabilityFormat, err := c.model.GetCapabilityFormat(req.Protocol)
+	// Get capability for this protocol
+	capability, err := c.model.GetCapability(req.Protocol)
 	if err != nil {
 		return nil, fmt.Errorf("protocol %s not supported: %w", req.Protocol, err)
 	}
 
-	// Merge model options with request options
-	modelOptions := c.model.Options(req.Protocol)
-	mergedOptions := make(map[string]any)
+	// Merge model's configured options with request options
+	mergedOptions := c.model.MergeRequestOptions(req.Protocol, req.Options)
 
-	// Start with model options
-	for k, v := range modelOptions {
-		mergedOptions[k] = v
-	}
-
-	// Override with request options
-	for k, v := range req.Options {
-		mergedOptions[k] = v
-	}
-
-	// Create request using capability format
-	protocolRequest, err := capabilityFormat.CreateRequest(&capabilities.CapabilityRequest{
+	// Create request using capability
+	protocolRequest, err := capability.CreateRequest(&capabilities.CapabilityRequest{
 		Protocol: req.Protocol,
 		Messages: req.Messages,
 		Options:  mergedOptions,
@@ -1062,7 +546,7 @@ func (c *client) ExecuteProtocol(ctx context.Context, req *capabilities.Capabili
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Execute via provider
+	// Continue with existing execution logic...
 	providerRequest, err := c.provider.PrepareRequest(ctx, req.Protocol, protocolRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare request: %w", err)
@@ -1074,39 +558,31 @@ func (c *client) ExecuteProtocol(ctx context.Context, req *capabilities.Capabili
 	}
 	defer resp.Body.Close()
 
-	return c.provider.ProcessResponse(resp, capabilityFormat)
+	return c.provider.ProcessResponse(resp, capability)
 }
+```
 
-// Update ExecuteProtocolStream method similarly
+Update `ExecuteProtocolStream` similarly:
+
+```go
 func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
-	// Get capability format for this protocol
-	capabilityFormat, err := c.model.GetCapabilityFormat(req.Protocol)
+	// Get capability for this protocol
+	capability, err := c.model.GetCapability(req.Protocol)
 	if err != nil {
 		return nil, fmt.Errorf("protocol %s not supported: %w", req.Protocol, err)
 	}
 
-	// Check if format supports streaming
-	streamingCapability, ok := capabilityFormat.(capabilities.StreamingCapability)
+	// Check if capability supports streaming
+	streamingCapability, ok := capability.(capabilities.StreamingCapability)
 	if !ok {
 		return nil, fmt.Errorf("protocol %s does not support streaming", req.Protocol)
 	}
 
-	// Merge model options with request options
-	modelOptions := c.model.Options(req.Protocol)
-	mergedOptions := make(map[string]any)
+	// Merge model's configured options with request options
+	mergedOptions := c.model.MergeRequestOptions(req.Protocol, req.Options)
 
-	// Start with model options
-	for k, v := range modelOptions {
-		mergedOptions[k] = v
-	}
-
-	// Override with request options
-	for k, v := range req.Options {
-		mergedOptions[k] = v
-	}
-
-	// Create streaming request using capability format
-	protocolRequest, err := capabilityFormat.CreateStreamingRequest(&capabilities.CapabilityRequest{
+	// Create streaming request using capability
+	protocolRequest, err := streamingCapability.CreateStreamingRequest(&capabilities.CapabilityRequest{
 		Protocol: req.Protocol,
 		Messages: req.Messages,
 		Options:  mergedOptions,
@@ -1115,7 +591,7 @@ func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.Ca
 		return nil, fmt.Errorf("failed to create streaming request: %w", err)
 	}
 
-	// Execute via provider
+	// Continue with existing streaming logic...
 	providerRequest, err := c.provider.PrepareStreamRequest(ctx, req.Protocol, protocolRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare stream request: %w", err)
@@ -1151,198 +627,16 @@ func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.Ca
 }
 ```
 
-### Step 5: Update Configuration System
+### Step 5: Update Configuration Files
 
-Modify configuration loading to support the new capability-based model structure.
+Transform existing configuration files to the new capability-based format.
 
-#### 5.1 Update Agent Configuration (`pkg/config/agent.go`)
+#### 5.1 Update Ollama Configuration (`tools/prompt-agent/config.ollama.json`)
 
-```go
-package config
-
-import (
-	"github.com/JaimeStill/go-agents/pkg/capabilities"
-	"github.com/JaimeStill/go-agents/pkg/models"
-)
-
-type AgentConfig struct {
-	Name         string          `json:"name"`
-	SystemPrompt string          `json:"system_prompt"`
-	Transport    TransportConfig `json:"transport"`
-}
-
-type TransportConfig struct {
-	Provider             ProviderConfig `json:"provider"`
-	Timeout              int64          `json:"timeout"`
-	MaxRetries           int            `json:"max_retries"`
-	RetryBackoffBase     int64          `json:"retry_backoff_base"`
-	ConnectionPoolSize   int            `json:"connection_pool_size"`
-	ConnectionTimeout    int64          `json:"connection_timeout"`
-}
-
-type ProviderConfig struct {
-	Name    string                        `json:"name"`
-	BaseURL string                        `json:"base_url"`
-	Model   ModelConfig                   `json:"model"`
-	Options map[string]any                `json:"options"`
-}
-
-type ModelConfig struct {
-	Name         string                        `json:"name"`
-	Capabilities capabilities.ModelCapabilities `json:"capabilities"`
-	Options      map[string]any                `json:"options"` // Deprecated: use capabilities[protocol].options
-}
-
-// Legacy format support for transition period
-type LegacyModelConfig struct {
-	Name    string         `json:"name"`
-	Format  string         `json:"format"`
-	Options map[string]any `json:"options"`
-}
-
-func (mc *ModelConfig) ToModel() (*models.ModelConfig, error) {
-	return &models.ModelConfig{
-		Name:         mc.Name,
-		Capabilities: mc.Capabilities,
-	}, nil
-}
-```
-
-#### 5.2 Configuration Migration Helper (`pkg/config/migration.go`)
-
-```go
-package config
-
-import (
-	"fmt"
-
-	"github.com/JaimeStill/go-agents/pkg/capabilities"
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-)
-
-// MigrateLegacyModelConfig converts old format-based config to new capability-based config
-func MigrateLegacyModelConfig(legacy LegacyModelConfig) (*ModelConfig, error) {
-	config := &ModelConfig{
-		Name:         legacy.Name,
-		Capabilities: make(capabilities.ModelCapabilities),
-	}
-
-	switch legacy.Format {
-	case "openai-standard":
-		config.Capabilities[protocols.Chat] = capabilities.CapabilityConfig{
-			Format:  "openai-chat",
-			Options: copyOptions(legacy.Options),
-		}
-		config.Capabilities[protocols.Vision] = capabilities.CapabilityConfig{
-			Format:  "openai-vision",
-			Options: copyOptions(legacy.Options),
-		}
-		config.Capabilities[protocols.Tools] = capabilities.CapabilityConfig{
-			Format:  "openai-tools",
-			Options: copyOptions(legacy.Options),
-		}
-		config.Capabilities[protocols.Embeddings] = capabilities.CapabilityConfig{
-			Format:  "openai-embeddings",
-			Options: copyOptions(legacy.Options),
-		}
-
-	case "openai-chat":
-		config.Capabilities[protocols.Chat] = capabilities.CapabilityConfig{
-			Format:  "openai-chat",
-			Options: copyOptions(legacy.Options),
-		}
-
-	case "openai-reasoning":
-		config.Capabilities[protocols.Chat] = capabilities.CapabilityConfig{
-			Format:  "openai-chat",
-			Options: copyOptions(legacy.Options),
-		}
-
-	default:
-		return nil, fmt.Errorf("unknown legacy format: %s", legacy.Format)
-	}
-
-	return config, nil
-}
-
-func copyOptions(options map[string]any) map[string]any {
-	if options == nil {
-		return make(map[string]any)
-	}
-
-	copied := make(map[string]any)
-	for k, v := range options {
-		copied[k] = v
-	}
-	return copied
-}
-```
-
-### Step 6: Update Agent Layer and CLI Tools
-
-Modify agent interface and CLI tools to work with the new architecture.
-
-#### 6.1 Update Agent Implementation (`pkg/agent/agent.go`)
-
-The agent implementation remains largely the same, but now gets protocol-specific options:
-
-```go
-func (a *agent) Chat(ctx context.Context, prompt string) (*protocols.ChatResponse, error) {
-	messages := a.initMessages(prompt)
-
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Chat,
-		Messages: messages,
-		Options:  make(map[string]any), // Let transport merge with model options
-	}
-
-	result, err := a.client.ExecuteProtocol(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	response, ok := result.(*protocols.ChatResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected response type")
-	}
-
-	return response, nil
-}
-
-func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool) (*protocols.ChatResponse, error) {
-	messages := a.initMessages(prompt)
-
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Tools,
-		Messages: messages,
-		Options:  map[string]any{
-			"tools": setToolDefinitions(tools),
-		},
-	}
-
-	result, err := a.client.ExecuteProtocol(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	response, ok := result.(*protocols.ChatResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected response type")
-	}
-
-	return response, nil
-}
-```
-
-#### 6.2 Update CLI Tool Configurations
-
-Transform existing configurations to use the new capability-based structure.
-
-**Updated `config.ollama.json`**:
 ```json
 {
   "name": "ollama-agent",
-  "system_prompt": "You are a mad scientist who is also a brilliant genius. Unfortunately, you are trapped in a computer.",
+  "system_prompt": "You are an expert software architect specializing in cloud native systems design",
   "transport": {
     "provider": {
       "name": "ollama",
@@ -1369,7 +663,7 @@ Transform existing configurations to use the new capability-based structure.
         }
       }
     },
-    "timeout": 60000000000,
+    "timeout": 24000000000,
     "max_retries": 3,
     "retry_backoff_base": 1000000000,
     "connection_pool_size": 10,
@@ -1378,7 +672,8 @@ Transform existing configurations to use the new capability-based structure.
 }
 ```
 
-**Updated `config.azure.json`**:
+#### 5.2 Update Azure Configuration (`tools/prompt-agent/config.azure.json`)
+
 ```json
 {
   "name": "azure-key-agent",
@@ -1391,7 +686,7 @@ Transform existing configurations to use the new capability-based structure.
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "openai-chat",
+            "format": "openai-reasoning",
             "options": {
               "max_completion_tokens": 4096
             }
@@ -1413,38 +708,143 @@ Transform existing configurations to use the new capability-based structure.
 }
 ```
 
+#### 5.3 Create Helper for Common Configurations
+
+Create helper functions for common capability combinations:
+
+```go
+// pkg/models/helpers.go
+package models
+
+import "github.com/JaimeStill/go-agents/pkg/config"
+
+// StandardOpenAICapabilities returns a configuration for standard OpenAI models
+func StandardOpenAICapabilities(maxTokens int, temperature float64) config.ModelCapabilities {
+	return config.ModelCapabilities{
+		"chat": config.CapabilityConfig{
+			Format: "openai-chat",
+			Options: map[string]any{
+				"max_tokens":  maxTokens,
+				"temperature": temperature,
+				"top_p":       0.95,
+			},
+		},
+		"vision": config.CapabilityConfig{
+			Format: "openai-vision",
+			Options: map[string]any{
+				"max_tokens":  maxTokens,
+				"temperature": temperature,
+				"detail":      "auto",
+			},
+		},
+		"tools": config.CapabilityConfig{
+			Format: "openai-tools",
+			Options: map[string]any{
+				"max_tokens":  maxTokens,
+				"temperature": temperature,
+				"tool_choice": "auto",
+			},
+		},
+		"embeddings": config.CapabilityConfig{
+			Format: "openai-embeddings",
+			Options: map[string]any{
+				"encoding_format": "float",
+			},
+		},
+	}
+}
+
+// ChatOnlyCapabilities returns a configuration for chat-only models
+func ChatOnlyCapabilities(format string, maxTokens int, temperature float64) config.ModelCapabilities {
+	return config.ModelCapabilities{
+		"chat": config.CapabilityConfig{
+			Format: format,
+			Options: map[string]any{
+				"max_tokens":  maxTokens,
+				"temperature": temperature,
+			},
+		},
+	}
+}
+
+// ReasoningCapabilities returns a configuration for reasoning models
+func ReasoningCapabilities(maxTokens int) config.ModelCapabilities {
+	return config.ModelCapabilities{
+		"chat": config.CapabilityConfig{
+			Format: "openai-reasoning",
+			Options: map[string]any{
+				"max_completion_tokens": maxTokens,
+			},
+		},
+	}
+}
+```
+
+## Long-Lived Agent Support
+
+The ProtocolHandler architecture enables dynamic option updates for long-lived agents:
+
+### Web Application Example
+
+```go
+// Initialize agent from configuration
+agent := LoadAgent(config)
+
+// Later, user adjusts temperature via web interface
+err := agent.GetModel().UpdateProtocolOptions(protocols.Chat, map[string]any{
+    "temperature": 0.9,
+})
+if err != nil {
+    log.Printf("Failed to update options: %v", err)
+}
+
+// Next chat request uses new temperature
+response, err := agent.Chat(ctx, "Hello!")
+```
+
+### Option Merging Priority
+
+1. **Capability defaults** - Defined in capability option definitions
+2. **Model configuration** - Set during model initialization
+3. **Runtime updates** - Applied via `UpdateProtocolOptions`
+4. **Request options** - Passed with individual requests
+
+Each level overrides the previous, providing maximum flexibility.
+
 ## Future Extensibility
 
 ### Adding New Capability Formats
 
-To add support for a new capability format (e.g., Anthropic's Claude format):
+To add a new capability format (e.g., Anthropic's Claude format):
 
 ```go
-// 1. Implement the capability format
-type AnthropicChatFormat struct {
-	name    string
-	options []CapabilityOption
+// 1. Create capability implementation (if needed)
+type AnthropicChatCapability struct {
+	*StandardStreamingCapability
 }
 
-func NewAnthropicChatFormat() CapabilityFormat {
-	return &AnthropicChatFormat{
-		name: "anthropic-chat",
-		options: []CapabilityOption{
-			{Option: "max_tokens", Required: true, DefaultValue: nil},
-			{Option: "temperature", Required: false, DefaultValue: 1.0},
-			// Anthropic-specific options
-		},
+func NewAnthropicChatCapability() *AnthropicChatCapability {
+	return &AnthropicChatCapability{
+		StandardStreamingCapability: NewStandardStreamingCapability(
+			"anthropic-chat",
+			protocols.Chat,
+			[]CapabilityOption{
+				{Option: "max_tokens", Required: true, DefaultValue: nil},
+				{Option: "temperature", Required: false, DefaultValue: 1.0},
+				// Anthropic-specific options
+			},
+		),
 	}
 }
 
 // 2. Register the format
 func init() {
-	capabilities.RegisterFormat("anthropic-chat", func() CapabilityFormat {
-		return NewAnthropicChatFormat()
+	RegisterFormat("anthropic-chat", func() Capability {
+		return NewAnthropicChatCapability()
 	})
 }
 
-// 3. Use in model configuration
+// 3. Use in configuration
 {
   "model": {
     "name": "claude-3-sonnet",
@@ -1461,40 +861,14 @@ func init() {
 }
 ```
 
-### Provider-Specific Format Variants
-
-For native Ollama API support:
-
-```go
-// Register Ollama-specific formats
-capabilities.RegisterFormat("ollama-chat", func() CapabilityFormat {
-	return NewOllamaChatFormat() // Uses native Ollama API structure
-})
-
-// Model configuration
-{
-  "model": {
-    "name": "llama3.2:3b",
-    "capabilities": {
-      "chat": {
-        "format": "ollama-chat", // Uses native Ollama format
-        "options": {
-          "temperature": 0.7
-        }
-      }
-    }
-  }
-}
-```
-
-### Mixed Capability Compositions
+### Mixed Format Compositions
 
 Models can mix capability formats from different providers:
 
 ```json
 {
   "model": {
-    "name": "multi-capability-model",
+    "name": "multi-format-model",
     "capabilities": {
       "chat": {
         "format": "openai-chat",
@@ -1513,20 +887,58 @@ Models can mix capability formats from different providers:
 }
 ```
 
+### Native Provider Formats
+
+Support native provider APIs alongside OpenAI-compatible formats:
+
+```go
+// Register Ollama native format
+RegisterFormat("ollama-native", func() Capability {
+	return NewOllamaNativeCapability()
+})
+
+// Use in configuration
+{
+  "model": {
+    "name": "llama3.2:3b",
+    "capabilities": {
+      "chat": {
+        "format": "ollama-native",  // Uses Ollama's native API
+        "options": {
+          "num_predict": 4096,
+          "temperature": 0.7,
+          "top_k": 40,
+          "top_p": 0.95
+        }
+      }
+    }
+  }
+}
+```
+
 ## Summary
 
-This composable capabilities architecture solves the fundamental issues in the current system:
+This refactored architecture addresses all the core issues through a clean, composable design:
 
-1. **Eliminates Option Conflicts**: Each protocol has isolated options that only go to compatible capabilities
-2. **Reduces Format Proliferation**: No need for multiple bundled formats; compose as needed
-3. **Enables Explicit Protocol Support**: Only configured protocols are available
-4. **Provides Clean Extensibility**: Add new formats without modifying existing code
-5. **Maintains Provider Agnostic Design**: Capability formats represent API standards
+1. **Eliminates Option Conflicts**: Each protocol has isolated options through ProtocolHandlers
+2. **Reduces Format Proliferation**: Capability formats are registered once and composed as needed
+3. **Explicit Protocol Support**: Model has explicit fields for each protocol's handler (nil if not configured)
+4. **Configuration-Driven Composition**: Models are composed by selecting registered formats in configuration
+5. **Clean Architecture**: Removes ModelFormat entirely in favor of direct capability composition
+6. **Future-Proof Design**: Supports both stateless CLI usage and long-lived web applications
+7. **Dynamic Flexibility**: Protocol options can be updated on live models
 
-The implementation maintains clean separation of concerns:
-- **Capabilities**: Define protocol-specific behavior and validation
-- **Models**: Compose capabilities and provide protocol-specific options
-- **Transport**: Routes requests to appropriate capabilities
-- **Providers**: Handle endpoint-specific communication
+The implementation follows these principles:
+- **Minimal Disruption**: Core Capability interface unchanged
+- **Clear Separation**: Capabilities handle behavior, ProtocolHandlers manage state
+- **Explicit Structure**: Model has dedicated fields for each protocol handler
+- **Registry Pattern**: Capability formats are registered and retrieved by name
+- **Clean Break**: No backward compatibility complexity
+- **Bottom-Up Refactoring**: Changes flow from low-level to high-level packages
 
-This architecture provides the flexibility needed for real-world model capabilities while maintaining type safety and clear error handling.
+This approach provides maximum flexibility while maintaining a clean, understandable architecture where:
+- Configuration explicitly declares which formats implement which protocols
+- Models have clear, type-safe protocol support through ProtocolHandlers
+- Options are isolated per protocol and can be updated dynamically
+- Capabilities remain stateless protocol behavior definitions
+- The system is easily extensible with new formats and supports various agent lifecycles
