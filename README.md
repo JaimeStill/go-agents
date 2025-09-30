@@ -5,6 +5,7 @@ A platform and model agnostic Go agent primitive library.
 ## Documentation
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)**: Technical specifications and implementation details
+- **[PROJECT.md](./PROJECT.md)**: Project roadmap, scope, and future enhancements
 - **[_context/](./_context/)**: Implementation guides and development summaries
 
 ## Current Implementation
@@ -39,6 +40,20 @@ The package provides a complete multi-protocol LLM integration system with a com
 - Go 1.25 or later
 - For Ollama: at a minimum, Docker. If you have an NVIDIA GPU, you'll want to install the `nvidia-container-toolkit` package and [configure Docker for CDI to work with the NVIDIA Container Toolkit](https://github.com/JaimeStill/LinuxNotes/tree/main/omarchy#configure-docker-for-cdi-to-work-with-nvidia-container-toolkit). If you just have Docker, you can still run and fallback to CPU processing, but your performance will be noticeably bad.
 - For Azure: you will need to have the Azure CLI installed and authenticated to a tenant where you have [created the necessary infrastructure](./scripts/azure/README.md) to connect to a deployed Azure OpenAI model.
+
+### Deploy an Azure OpenAI Service Model
+
+```sh
+. scripts/azure/components/cognitive-services-deployment.sh \
+  --model-format "OpenAI" \
+  --model-name "gpt-4o" \
+  --model-version "2024-11-20" \
+  --deployment-name "gpt-4o" \
+  --sku "Standard" \
+  --sku-capacity 10 \
+  --name "GoAgentsCognitiveService" \
+  --resource-group "GoAgentsResourceGroup"
+```
 
 ### Basic Usage
 

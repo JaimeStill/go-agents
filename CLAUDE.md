@@ -9,7 +9,7 @@ Whenever I reach out to you for assistance, I'm not asking you to make modificat
 
 You are authorized to create and modify documentation files to support my development process, but implementation of code changes should be guided through detailed planning documents rather than direct code modifications.
 
-Please refer to [README](./README.md), [ARCHITECTURE](./ARCHITECTURE.md), and [_context/](./_context/) for relevant project documentation.
+Please refer to [README](./README.md), [ARCHITECTURE](./ARCHITECTURE.md), [PROJECT](./PROJECT.md), and [_context/](./_context/) for relevant project documentation.
 
 ## Directory Conventions
 
@@ -22,6 +22,8 @@ Please refer to [README](./README.md), [ARCHITECTURE](./ARCHITECTURE.md), and [_
 ### Core Project Documents
 
 **ARCHITECTURE.md**: Technical specifications of current implementations, interface definitions, design patterns, and system architecture. Focus on concrete implementation details and current state.
+
+**PROJECT.md**: Project roadmap, scope definition, design philosophy, MVP completion checklist, supplemental package roadmap, and future enhancements. Defines what the library provides, what it doesn't provide, and planned extensions.
 
 **README.md**: User-facing documentation for installation, usage examples, configuration, and getting started information.
 

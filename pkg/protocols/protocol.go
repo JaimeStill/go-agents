@@ -14,8 +14,6 @@ const (
 	Vision     Protocol = "vision"
 	Tools      Protocol = "tools"
 	Embeddings Protocol = "embeddings"
-	Audio      Protocol = "audio"
-	Realtime   Protocol = "realtime"
 )
 
 type Request struct {
@@ -161,7 +159,7 @@ func ExtractOption[T any](options map[string]any, key string, defaultValue T) T 
 
 func IsValid(p string) bool {
 	switch Protocol(p) {
-	case Chat, Vision, Tools, Embeddings, Audio, Realtime:
+	case Chat, Vision, Tools, Embeddings:
 		return true
 	default:
 		return false
@@ -183,7 +181,5 @@ func ValidProtocols() []Protocol {
 		Vision,
 		Tools,
 		Embeddings,
-		Audio,
-		Realtime,
 	}
 }

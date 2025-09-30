@@ -99,6 +99,11 @@ func (c *VisionCapability) ProcessImages(messages []protocols.Message, options m
 		Content: content,
 	}
 
+	// Remove vision-specific options that are now embedded in message content
+	// These should not be sent as top-level request parameters
+	delete(options, "images")
+	delete(options, "detail")
+
 	return messages, nil
 }
 
