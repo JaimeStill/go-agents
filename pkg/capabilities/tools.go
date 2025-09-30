@@ -26,7 +26,7 @@ func NewToolsCapability(name string, options []CapabilityOption) *ToolsCapabilit
 	}
 }
 
-func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo)
 		return nil, fmt.Errorf("tools must be a non-empty array of FunctionDefinition")
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 
 	return &protocols.Request{
 		Messages: req.Messages,
@@ -45,7 +45,7 @@ func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo)
 	}, nil
 }
 
-func (c *ToolsCapability) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *ToolsCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (c *ToolsCapability) CreateStreamingRequest(req *CapabilityRequest, model M
 		return nil, fmt.Errorf("tools must be a non-empty array of FunctionDefinition")
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 	options["stream"] = true
 
 	return &protocols.Request{

@@ -4,21 +4,21 @@ import "time"
 
 type TransportConfig struct {
 	Provider           *ProviderConfig `json:"provider"`
-	Timeout            time.Duration   `json:"timeout"`
+	Timeout            Duration        `json:"timeout"`
 	MaxRetries         int             `json:"max_retries"`
-	RetryBackoffBase   time.Duration   `json:"retry_backoff_base"`
+	RetryBackoffBase   Duration        `json:"retry_backoff_base"`
 	ConnectionPoolSize int             `json:"connection_pool_size"`
-	ConnectionTimeout  time.Duration   `json:"connection_timeout"`
+	ConnectionTimeout  Duration        `json:"connection_timeout"`
 }
 
 func DefaultTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		Provider:           DefaultProviderConfig(),
-		Timeout:            60 * time.Second,
+		Timeout:            Duration(2 * time.Minute),
 		MaxRetries:         3,
-		RetryBackoffBase:   time.Second,
+		RetryBackoffBase:   Duration(1 * time.Second),
 		ConnectionPoolSize: 10,
-		ConnectionTimeout:  90 * time.Second,
+		ConnectionTimeout:  Duration(90 * time.Second),
 	}
 }
 

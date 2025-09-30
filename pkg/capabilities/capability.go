@@ -28,7 +28,7 @@ type Capability interface {
 	ValidateOptions(options map[string]any) error
 	ProcessOptions(options map[string]any) (map[string]any, error)
 
-	CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
+	CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
 	ParseResponse(data []byte) (any, error)
 
 	SupportsStreaming() bool
@@ -37,14 +37,9 @@ type Capability interface {
 type StreamingCapability interface {
 	Capability
 
-	CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
+	CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
 	ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error)
 	IsStreamComplete(data string) bool
-}
-
-type ModelInfo interface {
-	Name() string
-	Options() map[string]any
 }
 
 type StandardCapability struct {

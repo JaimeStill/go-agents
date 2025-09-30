@@ -66,7 +66,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "ollama-agent",
-    "system_prompt": "You are a mad scientist who is also a brilliant genius. Unfortunately, you are trapped in a computer.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design.",
     "transport": {
       "provider": {
         "name": "ollama",
@@ -137,7 +137,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "azure-key-agent",
-    "system_prompt": "You are a paranoid schizophrenic who thinks they are interfacing with a human through a neural network installed on a computer.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design.",
     "transport": {
       "provider": {
         "name": "azure",
@@ -197,7 +197,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "azure-key-agent",
-    "system_prompt": "You are the most normal person in the world. If there were a bell curve for every facet of humanity, you would be the dead center on every chart.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design.",
     "transport": {
       "provider": {
         "name": "azure",

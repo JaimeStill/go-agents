@@ -117,18 +117,19 @@ This refactor maintains the existing capability infrastructure while enabling fl
 
 Refactoring proceeds from lowest-level to highest-level packages:
 
-1. `pkg/capabilities` - Add registry for capability formats
-2. `pkg/config` - Configuration structures for capability composition
-3. `pkg/models` - Transform from format-based to protocol handler composition
-4. `pkg/providers` - Minor updates for capability selection
-5. `pkg/transport` - Update option handling for protocol-specific options
-6. `pkg/agent` - No changes needed
+1. `pkg/capabilities` - Add registry for capability formats, remove ModelInfo interface
+2. `pkg/protocols` - Add protocol validation helpers
+3. `pkg/config` - Configuration structures for capability composition
+4. `pkg/models` - Transform from format-based to protocol handler composition
+5. `pkg/providers` - Minor updates for capability selection
+6. `pkg/transport` - Update option handling for protocol-specific options
+7. `pkg/agent` - No changes needed
 
 ## Step-by-Step Implementation
 
-### Step 1: Create Capability Registry
+### Step 1: Update Capabilities Package
 
-Add a registry for named capability formats without changing the existing Capability interface.
+Add a registry for named capability formats and remove the ModelInfo interface.
 
 #### 1.1 Create Registry (`pkg/capabilities/registry.go`)
 
@@ -246,14 +247,129 @@ func init() {
 }
 ```
 
-### Step 2: Update Configuration Package
+#### 1.3 Update Capability Interface (`pkg/capabilities/capability.go`)
+
+Remove the ModelInfo interface and update Capability interface to use model name string:
+
+```go
+// Remove the ModelInfo interface entirely
+
+// Update the Capability interface
+type Capability interface {
+	Name() string
+	Protocol() protocols.Protocol
+	Options() []CapabilityOption
+
+	ValidateOptions(options map[string]any) error
+	ProcessOptions(options map[string]any) (map[string]any, error)
+
+	CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
+	ParseResponse(data []byte) (any, error)
+
+	SupportsStreaming() bool
+}
+
+type StreamingCapability interface {
+	Capability
+
+	CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
+	ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error)
+	IsStreamComplete(data string) bool
+}
+```
+
+#### 1.4 Update Capability Implementations
+
+Update all capability implementations to use `model string` parameter instead of `ModelInfo`:
+
+```go
+// Example: pkg/capabilities/chat.go
+func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
+	options, err := c.ProcessOptions(req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	options["model"] = model
+
+	return &protocols.Request{
+		Messages: req.Messages,
+		Options:  options,
+	}, nil
+}
+
+func (c *ChatCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
+	options, err := c.ProcessOptions(req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	options["model"] = model
+	options["stream"] = true
+
+	return &protocols.Request{
+		Messages: req.Messages,
+		Options:  options,
+	}, nil
+}
+```
+
+Apply similar changes to `vision.go`, `tools.go`, and `embeddings.go`.
+
+### Step 2: Update Protocols Package
+
+Add protocol validation helpers to support programmatic protocol validation.
+
+#### 2.1 Add Validation Functions (`pkg/protocols/protocol.go`)
+
+```go
+// Add these functions to pkg/protocols/protocol.go
+
+import "strings"
+
+// ValidProtocols returns all valid protocol identifiers
+func ValidProtocols() []Protocol {
+	return []Protocol{
+		Chat,
+		Vision,
+		Tools,
+		Embeddings,
+		Audio,
+		Realtime,
+	}
+}
+
+// IsValid checks if a string is a valid protocol
+func IsValid(p string) bool {
+	switch Protocol(p) {
+	case Chat, Vision, Tools, Embeddings, Audio, Realtime:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidProtocolsString returns a comma-separated list for error messages
+func ValidProtocolsString() string {
+	valid := ValidProtocols()
+	strs := make([]string, len(valid))
+	for i, p := range valid {
+		strs[i] = string(p)
+	}
+	return strings.Join(strs, ", ")
+}
+```
+
+### Step 3: Update Configuration Package
 
 Define configuration structures to support capability composition.
 
-#### 2.1 Update Model Configuration (`pkg/config/model.go`)
+#### 3.1 Update Model Configuration (`pkg/config/model.go`)
 
 ```go
 package config
+
+import "maps"
 
 // CapabilityConfig represents configuration for a single capability
 type CapabilityConfig struct {
@@ -286,23 +402,23 @@ func (c *ModelConfig) Merge(source *ModelConfig) {
 		if c.Capabilities == nil {
 			c.Capabilities = make(ModelCapabilities)
 		}
-		for protocol, capConfig := range source.Capabilities {
-			c.Capabilities[protocol] = capConfig
-		}
+		maps.Copy(c.Capabilities, source.Capabilities)
 	}
 }
 ```
 
-### Step 3: Update Model Layer
+### Step 4: Update Model Layer
 
 Transform the model layer to use ProtocolHandlers for stateful capability management.
 
-#### 3.1 Define ProtocolHandler (`pkg/models/handler.go`)
+#### 4.1 Define ProtocolHandler (`pkg/models/handler.go`)
 
 ```go
 package models
 
 import (
+	"maps"
+
 	"github.com/JaimeStill/go-agents/pkg/capabilities"
 )
 
@@ -316,7 +432,7 @@ type ProtocolHandler struct {
 func NewProtocolHandler(capability capabilities.Capability, options map[string]any) *ProtocolHandler {
 	return &ProtocolHandler{
 		capability: capability,
-		options:    copyOptions(options),
+		options:    maps.Clone(options),
 	}
 }
 
@@ -332,39 +448,20 @@ func (h *ProtocolHandler) Options() map[string]any {
 
 // UpdateOptions updates the configured options (for long-lived agents)
 func (h *ProtocolHandler) UpdateOptions(newOptions map[string]any) {
-	h.options = mergeOptions(h.options, newOptions)
+	maps.Copy(h.options, newOptions)
 }
 
-// MergeRequestOptions merges configured options with request-time options
+// MergeRequestOptions merges configured options with request-time options.
+// Request options take precedence over configured options.
+// Note: Merged options are validated in capability.CreateRequest() via ProcessOptions().
 func (h *ProtocolHandler) MergeRequestOptions(requestOptions map[string]any) map[string]any {
-	return mergeOptions(h.options, requestOptions)
-}
-
-// Helper functions
-func copyOptions(options map[string]any) map[string]any {
-	if options == nil {
-		return make(map[string]any)
-	}
-	copied := make(map[string]any)
-	for k, v := range options {
-		copied[k] = v
-	}
-	return copied
-}
-
-func mergeOptions(base, override map[string]any) map[string]any {
-	merged := make(map[string]any)
-	for k, v := range base {
-		merged[k] = v
-	}
-	for k, v := range override {
-		merged[k] = v
-	}
+	merged := maps.Clone(h.options)
+	maps.Copy(merged, requestOptions)
 	return merged
 }
 ```
 
-#### 3.2 Update Model Interface and Implementation (`pkg/models/model.go`)
+#### 4.2 Update Model Interface and Implementation (`pkg/models/model.go`)
 
 ```go
 package models
@@ -413,23 +510,34 @@ func New(cfg *config.ModelConfig) (Model, error) {
 
 	// Initialize protocol handlers from configuration
 	for protocolName, capConfig := range cfg.Capabilities {
+		// Validate protocol name
+		if !protocols.IsValid(protocolName) {
+			return nil, fmt.Errorf(
+				"invalid protocol in configuration: %s (valid protocols: %s)",
+				protocolName,
+				protocols.ValidProtocolsString(),
+			)
+		}
+
+		protocol := protocols.Protocol(protocolName)
+
 		// Get capability format from registry
 		capability, err := capabilities.GetFormat(capConfig.Format)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get capability format '%s' for protocol %s: %w",
-				capConfig.Format, protocolName, err)
+				capConfig.Format, protocol, err)
 		}
 
 		// Validate options for this capability
 		if err := capability.ValidateOptions(capConfig.Options); err != nil {
-			return nil, fmt.Errorf("invalid options for %s protocol: %w", protocolName, err)
+			return nil, fmt.Errorf("invalid options for %s protocol: %w", protocol, err)
 		}
 
 		// Create protocol handler
 		handler := NewProtocolHandler(capability, capConfig.Options)
 
 		// Assign to appropriate protocol field
-		switch protocols.Protocol(protocolName) {
+		switch protocol {
 		case protocols.Chat:
 			m.chat = handler
 		case protocols.Vision:
@@ -439,7 +547,8 @@ func New(cfg *config.ModelConfig) (Model, error) {
 		case protocols.Embeddings:
 			m.embeddings = handler
 		default:
-			return nil, fmt.Errorf("unknown protocol: %s", protocolName)
+			// Should never reach here due to IsValid() check above
+			return nil, fmt.Errorf("unhandled protocol: %s", protocol)
 		}
 	}
 
@@ -510,128 +619,466 @@ func (m *model) getHandler(p protocols.Protocol) *ProtocolHandler {
 }
 ```
 
-#### 3.3 Remove ModelFormat Files
+#### 4.3 Remove ModelFormat Files
 
 Delete the following files as they are no longer needed:
 - `pkg/models/format.go`
 - `pkg/models/registry.go`
 - `pkg/models/openai.go` (capability format registrations moved to pkg/capabilities/init.go)
 
-### Step 4: Update Transport Layer
+### Step 5: Update Transport Layer
 
 Modify transport to use protocol-specific options from the new model structure.
 
-#### 4.1 Update Transport Client (`pkg/transport/client.go`)
+#### 5.1 Update Transport Client (`pkg/transport/client.go`)
 
-Update the `ExecuteProtocol` method to use the new model interface:
+Update the public `ExecuteProtocol` and `ExecuteProtocolStream` methods to handle option merging:
 
 ```go
 func (c *client) ExecuteProtocol(ctx context.Context, req *capabilities.CapabilityRequest) (any, error) {
-	// Get capability for this protocol
 	capability, err := c.model.GetCapability(req.Protocol)
 	if err != nil {
-		return nil, fmt.Errorf("protocol %s not supported: %w", req.Protocol, err)
+		return nil, fmt.Errorf("capability selection failed: %w", err)
 	}
 
 	// Merge model's configured options with request options
 	mergedOptions := c.model.MergeRequestOptions(req.Protocol, req.Options)
 
-	// Create request using capability
-	protocolRequest, err := capability.CreateRequest(&capabilities.CapabilityRequest{
+	// Create merged request
+	mergedReq := &capabilities.CapabilityRequest{
 		Protocol: req.Protocol,
 		Messages: req.Messages,
 		Options:  mergedOptions,
-	}, c.model)
+	}
+
+	return c.execute(ctx, capability, mergedReq)
+}
+
+func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
+	capability, err := c.model.GetCapability(req.Protocol)
+	if err != nil {
+		return nil, fmt.Errorf("capability selection failed: %w", err)
+	}
+
+	streamingCapability, ok := capability.(capabilities.StreamingCapability)
+	if !ok {
+		return nil, fmt.Errorf("capability %s does not support streaming", capability.Name())
+	}
+
+	// Merge model's configured options with request options
+	mergedOptions := c.model.MergeRequestOptions(req.Protocol, req.Options)
+
+	// Create merged request
+	mergedReq := &capabilities.CapabilityRequest{
+		Protocol: req.Protocol,
+		Messages: req.Messages,
+		Options:  mergedOptions,
+	}
+
+	return c.executeStream(ctx, streamingCapability, mergedReq)
+}
+```
+
+Update the internal `execute` and `executeStream` helper methods to use model name:
+
+```go
+func (c *client) execute(ctx context.Context, capability capabilities.Capability, req *capabilities.CapabilityRequest) (any, error) {
+	// Create request using capability with model name
+	// Note: Options are already merged and will be validated in ProcessOptions()
+	capRequest, err := capability.CreateRequest(req, c.model.Name())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Continue with existing execution logic...
-	providerRequest, err := c.provider.PrepareRequest(ctx, req.Protocol, protocolRequest)
+	providerRequest, err := c.provider.PrepareRequest(ctx, req.Protocol, capRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(providerRequest.ToHTTPRequest())
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		providerRequest.URL,
+		bytes.NewBuffer(providerRequest.Body),
+	)
 	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	for key, value := range providerRequest.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	c.provider.SetHeaders(httpReq)
+
+	httpClient := c.HTTPClient()
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		c.setHealthy(false)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return c.provider.ProcessResponse(resp, capability)
-}
-```
-
-Update `ExecuteProtocolStream` similarly:
-
-```go
-func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
-	// Get capability for this protocol
-	capability, err := c.model.GetCapability(req.Protocol)
+	result, err := c.provider.ProcessResponse(resp, capability)
 	if err != nil {
-		return nil, fmt.Errorf("protocol %s not supported: %w", req.Protocol, err)
+		c.setHealthy(false)
+		return nil, err
 	}
 
-	// Check if capability supports streaming
-	streamingCapability, ok := capability.(capabilities.StreamingCapability)
-	if !ok {
-		return nil, fmt.Errorf("protocol %s does not support streaming", req.Protocol)
-	}
+	c.setHealthy(true)
+	return result, nil
+}
 
-	// Merge model's configured options with request options
-	mergedOptions := c.model.MergeRequestOptions(req.Protocol, req.Options)
-
-	// Create streaming request using capability
-	protocolRequest, err := streamingCapability.CreateStreamingRequest(&capabilities.CapabilityRequest{
-		Protocol: req.Protocol,
-		Messages: req.Messages,
-		Options:  mergedOptions,
-	}, c.model)
+func (c *client) executeStream(ctx context.Context, capability capabilities.StreamingCapability, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
+	// Create streaming request using capability with model name
+	// Note: Options are already merged and will be validated in ProcessOptions()
+	capRequest, err := capability.CreateStreamingRequest(req, c.model.Name())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streaming request: %w", err)
 	}
 
-	// Continue with existing streaming logic...
-	providerRequest, err := c.provider.PrepareStreamRequest(ctx, req.Protocol, protocolRequest)
+	providerRequest, err := c.provider.PrepareStreamRequest(ctx, req.Protocol, capRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare stream request: %w", err)
+		return nil, fmt.Errorf("failed to prepare streaming request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(providerRequest.ToHTTPRequest())
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		providerRequest.URL,
+		bytes.NewBuffer(providerRequest.Body),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("stream request failed: %w", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	streamOutput, err := c.provider.ProcessStreamResponse(ctx, resp, streamingCapability)
+	for key, value := range providerRequest.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	c.provider.SetHeaders(httpReq)
+
+	httpClient := c.HTTPClient()
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
+		c.setHealthy(false)
+		return nil, fmt.Errorf("streaming request failed: %w", err)
+	}
+
+	stream, err := c.provider.ProcessStreamResponse(ctx, resp, capability)
+	if err != nil {
+		c.setHealthy(false)
 		resp.Body.Close()
-		return nil, fmt.Errorf("failed to process stream: %w", err)
+		return nil, err
 	}
 
-	// Convert provider stream to protocol stream
-	output := make(chan protocols.StreamingChunk)
+	outStream := make(chan protocols.StreamingChunk)
 	go func() {
-		defer close(output)
-		for chunk := range streamOutput {
-			if streamChunk, ok := chunk.(*protocols.StreamingChunk); ok {
-				select {
-				case output <- *streamChunk:
-				case <-ctx.Done():
-					return
-				}
+		defer close(outStream)
+		defer resp.Body.Close()
+
+		for data := range stream {
+			if chunk, ok := data.(*protocols.StreamingChunk); ok {
+				outStream <- *chunk
 			}
 		}
+		c.setHealthy(true)
 	}()
 
-	return output, nil
+	return outStream, nil
 }
 ```
 
-### Step 5: Update Configuration Files
+### Step 6: Update Agent Layer
 
-Transform existing configuration files to the new capability-based format.
+The agent layer needs minimal updates to work with protocol-specific options.
 
-#### 5.1 Update Ollama Configuration (`tools/prompt-agent/config.ollama.json`)
+#### 6.1 Update Agent Implementation (`pkg/agent/agent.go`)
+
+The agent currently calls `a.Model().Options()` which no longer exists in the new Model interface. Update the Agent interface and all agent methods to support optional per-request option overrides using variadic parameters:
+
+```go
+// Update Agent interface
+type Agent interface {
+	Client() transport.Client
+	Provider() providers.Provider
+	Model() models.Model
+
+	Chat(ctx context.Context, prompt string, options ...map[string]any) (*protocols.ChatResponse, error)
+	ChatStream(ctx context.Context, prompt string, options ...map[string]any) (<-chan protocols.StreamingChunk, error)
+
+	Vision(ctx context.Context, prompt string, images []string, options ...map[string]any) (*protocols.ChatResponse, error)
+	VisionStream(ctx context.Context, prompt string, images []string, options ...map[string]any) (<-chan protocols.StreamingChunk, error)
+
+	Tools(ctx context.Context, prompt string, tools []Tool, options ...map[string]any) (*protocols.ChatResponse, error)
+	ToolsStream(ctx context.Context, prompt string, tools []Tool, options ...map[string]any) (<-chan protocols.StreamingChunk, error)
+
+	Embed(ctx context.Context, input string, options ...map[string]any) (*protocols.EmbeddingsResponse, error)
+}
+```
+
+Update agent method implementations:
+
+```go
+// Update Chat method with optional per-request options
+func (a *agent) Chat(ctx context.Context, prompt string, options ...map[string]any) (*protocols.ChatResponse, error) {
+	messages := a.initMessages(prompt)
+
+	opts := make(map[string]any)
+	if len(options) > 0 && options[0] != nil {
+		opts = options[0]
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Chat,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	result, err := a.client.ExecuteProtocol(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, ok := result.(*protocols.ChatResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return response, nil
+}
+
+// Update ChatStream method
+func (a *agent) ChatStream(ctx context.Context, prompt string, options ...map[string]any) (<-chan protocols.StreamingChunk, error) {
+	messages := a.initMessages(prompt)
+
+	opts := make(map[string]any)
+	if len(options) > 0 && options[0] != nil {
+		opts = options[0]
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Chat,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	return a.client.ExecuteProtocolStream(ctx, req)
+}
+
+// Update Vision method
+func (a *agent) Vision(ctx context.Context, prompt string, images []string, options ...map[string]any) (*protocols.ChatResponse, error) {
+	messages := a.initMessages(prompt)
+
+	// Convert []string to []any for capability processing
+	imageList := make([]any, len(images))
+	for i, img := range images {
+		imageList[i] = img
+	}
+
+	opts := map[string]any{
+		"images": imageList,
+	}
+
+	// Merge user options if provided
+	if len(options) > 0 && options[0] != nil {
+		for k, v := range options[0] {
+			opts[k] = v
+		}
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Vision,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	result, err := a.client.ExecuteProtocol(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, ok := result.(*protocols.ChatResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return response, nil
+}
+
+// Update VisionStream method
+func (a *agent) VisionStream(ctx context.Context, prompt string, images []string, options ...map[string]any) (<-chan protocols.StreamingChunk, error) {
+	messages := a.initMessages(prompt)
+
+	// Convert []string to []any for capability processing
+	imageList := make([]any, len(images))
+	for i, img := range images {
+		imageList[i] = img
+	}
+
+	opts := map[string]any{
+		"images": imageList,
+	}
+
+	if len(options) > 0 && options[0] != nil {
+		for k, v := range options[0] {
+			opts[k] = v
+		}
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Vision,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	return a.client.ExecuteProtocolStream(ctx, req)
+}
+
+// Update Tools method
+func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, options ...map[string]any) (*protocols.ChatResponse, error) {
+	messages := a.initMessages(prompt)
+
+	opts := map[string]any{
+		"tools": setToolDefinitions(tools),
+	}
+
+	if len(options) > 0 && options[0] != nil {
+		for k, v := range options[0] {
+			opts[k] = v
+		}
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Tools,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	result, err := a.client.ExecuteProtocol(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, ok := result.(*protocols.ChatResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return response, nil
+}
+
+// Update ToolsStream method
+func (a *agent) ToolsStream(ctx context.Context, prompt string, tools []Tool, options ...map[string]any) (<-chan protocols.StreamingChunk, error) {
+	messages := a.initMessages(prompt)
+
+	opts := map[string]any{
+		"tools": setToolDefinitions(tools),
+	}
+
+	if len(options) > 0 && options[0] != nil {
+		for k, v := range options[0] {
+			opts[k] = v
+		}
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Tools,
+		Messages: messages,
+		Options:  opts,
+	}
+
+	return a.client.ExecuteProtocolStream(ctx, req)
+}
+
+// Update Embed method
+func (a *agent) Embed(ctx context.Context, input string, options ...map[string]any) (*protocols.EmbeddingsResponse, error) {
+	opts := map[string]any{
+		"input": input,
+	}
+
+	if len(options) > 0 && options[0] != nil {
+		for k, v := range options[0] {
+			opts[k] = v
+		}
+	}
+
+	req := &capabilities.CapabilityRequest{
+		Protocol: protocols.Embeddings,
+		Messages: []protocols.Message{},
+		Options:  opts,
+	}
+
+	result, err := a.client.ExecuteProtocol(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, ok := result.(*protocols.EmbeddingsResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return response, nil
+}
+```
+
+**Key changes**:
+1. Agent methods no longer call `a.Model().Options()`
+2. Added variadic `options ...map[string]any` parameter to all methods for per-request overrides
+3. Protocol-specific parameters (`images`, `tools`, `input`) are set first, then merged with user options
+4. Transport layer merges request options with handler-configured options
+
+**Usage examples**:
+```go
+// Use configured options
+response, err := agent.Chat(ctx, "Hello")
+
+// Override temperature for this request only
+response, err := agent.Chat(ctx, "Creative prompt", map[string]any{
+    "temperature": 1.5,
+})
+
+// Vision with custom detail level
+response, err := agent.Vision(ctx, "What's in this image?", images, map[string]any{
+    "detail": "high",
+    "max_tokens": 8192,
+})
+```
+
+#### 6.2 Update Main Application (`tools/prompt-agent/main.go`)
+
+Update the context timeout to use the new Duration type:
+
+```go
+func main() {
+	// ... existing flag parsing ...
+
+	cfg, err := config.LoadAgentConfig(*configFile)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// ... existing token and system prompt overrides ...
+
+	a, err := agent.New(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create agent: %v", err)
+	}
+
+	// Update to use .ToDuration()
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Transport.Timeout.ToDuration())
+	defer cancel()
+
+	// ... rest of main function unchanged ...
+}
+```
+
+### Step 7: Update Configuration Files
+
+Transform existing configuration files to the new capability-based format and human-readable duration strings.
+
+#### 7.1 Update Ollama Configuration (`tools/prompt-agent/config.ollama.json`)
 
 ```json
 {
@@ -672,7 +1119,7 @@ Transform existing configuration files to the new capability-based format.
 }
 ```
 
-#### 5.2 Update Azure Configuration (`tools/prompt-agent/config.azure.json`)
+#### 7.2 Update Azure Configuration (`tools/prompt-agent/config.azure.json`)
 
 ```json
 {
@@ -708,77 +1155,130 @@ Transform existing configuration files to the new capability-based format.
 }
 ```
 
-#### 5.3 Create Helper for Common Configurations
+#### 7.3 Update Azure Entra Configuration (`.admin/configs/config.azure-entra.json`)
 
-Create helper functions for common capability combinations:
-
-```go
-// pkg/models/helpers.go
-package models
-
-import "github.com/JaimeStill/go-agents/pkg/config"
-
-// StandardOpenAICapabilities returns a configuration for standard OpenAI models
-func StandardOpenAICapabilities(maxTokens int, temperature float64) config.ModelCapabilities {
-	return config.ModelCapabilities{
-		"chat": config.CapabilityConfig{
-			Format: "openai-chat",
-			Options: map[string]any{
-				"max_tokens":  maxTokens,
-				"temperature": temperature,
-				"top_p":       0.95,
-			},
-		},
-		"vision": config.CapabilityConfig{
-			Format: "openai-vision",
-			Options: map[string]any{
-				"max_tokens":  maxTokens,
-				"temperature": temperature,
-				"detail":      "auto",
-			},
-		},
-		"tools": config.CapabilityConfig{
-			Format: "openai-tools",
-			Options: map[string]any{
-				"max_tokens":  maxTokens,
-				"temperature": temperature,
-				"tool_choice": "auto",
-			},
-		},
-		"embeddings": config.CapabilityConfig{
-			Format: "openai-embeddings",
-			Options: map[string]any{
-				"encoding_format": "float",
-			},
-		},
-	}
-}
-
-// ChatOnlyCapabilities returns a configuration for chat-only models
-func ChatOnlyCapabilities(format string, maxTokens int, temperature float64) config.ModelCapabilities {
-	return config.ModelCapabilities{
-		"chat": config.CapabilityConfig{
-			Format: format,
-			Options: map[string]any{
-				"max_tokens":  maxTokens,
-				"temperature": temperature,
-			},
-		},
-	}
-}
-
-// ReasoningCapabilities returns a configuration for reasoning models
-func ReasoningCapabilities(maxTokens int) config.ModelCapabilities {
-	return config.ModelCapabilities{
-		"chat": config.CapabilityConfig{
-			Format: "openai-reasoning",
-			Options: map[string]any{
-				"max_completion_tokens": maxTokens,
-			},
-		},
-	}
+```json
+{
+  "name": "azure-key-agent",
+  "system_prompt": "You are the most normal person in the world. If there were a bell curve for every facet of humanity, you would be the dead center on every chart.",
+  "transport": {
+    "provider": {
+      "name": "azure",
+      "base_url": "https://agentic-toolkit-platform.openai.azure.com/openai",
+      "model": {
+        "name": "o3-mini",
+        "capabilities": {
+          "chat": {
+            "format": "openai-reasoning",
+            "options": {
+              "max_completion_tokens": 4096
+            }
+          }
+        }
+      },
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "bearer"
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
+  }
 }
 ```
+
+#### 7.4 Update Embeddings Configuration (`tools/prompt-agent/config.embedding.json`)
+
+The `embeddinggemma:300m` model only supports embeddings:
+
+```json
+{
+  "name": "embeddings-agent",
+  "transport": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "embeddinggemma:300m",
+        "capabilities": {
+          "embeddings": {
+            "format": "openai-embeddings",
+            "options": {
+              "dimensions": 768
+            }
+          }
+        }
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "6s"
+  }
+}
+```
+
+#### 7.5 Update Gemma Configuration (`tools/prompt-agent/config.gemma.json`)
+
+The `gemma3:4b` model supports chat, vision, and tools (standard OpenAI-compatible capabilities):
+
+```json
+{
+  "name": "vision-agent",
+  "transport": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "gemma3:4b",
+        "capabilities": {
+          "chat": {
+            "format": "openai-chat",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "top_p": 0.95
+            }
+          },
+          "vision": {
+            "format": "openai-vision",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "detail": "auto"
+            }
+          },
+          "tools": {
+            "format": "openai-tools",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
+            }
+          }
+        }
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
+  }
+}
+```
+
+**Note**: We have all necessary capability formats registered:
+- `openai-chat` - for chat
+- `openai-vision` - for vision
+- `openai-tools` - for tools
+- `openai-embeddings` - for embeddings
+- `openai-reasoning` - for reasoning models (no temperature/top_p)
 
 ## Long-Lived Agent Support
 

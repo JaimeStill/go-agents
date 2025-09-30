@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 )
 
 type Protocol string
@@ -128,4 +129,33 @@ func ExtractOption[T any](options map[string]any, key string, defaultValue T) T 
 		}
 	}
 	return defaultValue
+}
+
+func IsValid(p string) bool {
+	switch Protocol(p) {
+	case Chat, Vision, Tools, Embeddings, Audio, Realtime:
+		return true
+	default:
+		return false
+	}
+}
+
+func ProtocolStrings() string {
+	valid := ValidProtocols()
+	strs := make([]string, len(valid))
+	for i, p := range valid {
+		strs[i] = string(p)
+	}
+	return strings.Join(strs, ", ")
+}
+
+func ValidProtocols() []Protocol {
+	return []Protocol{
+		Chat,
+		Vision,
+		Tools,
+		Embeddings,
+		Audio,
+		Realtime,
+	}
 }

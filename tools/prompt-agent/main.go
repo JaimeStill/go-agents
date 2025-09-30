@@ -55,7 +55,7 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Transport.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Transport.Timeout.ToDuration())
 	defer cancel()
 
 	switch *protocol {

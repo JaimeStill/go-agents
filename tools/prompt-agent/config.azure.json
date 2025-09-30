@@ -7,9 +7,13 @@
       "base_url": "https://go-agents-platform.openai.azure.com/openai",
       "model": {
         "name": "o3-mini",
-        "format": "openai-reasoning",
-        "options": {
-          "max_completion_tokens": 4096
+        "capabilities": {
+          "chat": {
+            "format": "openai-reasoning",
+            "options": {
+              "max_completion_tokens": 4096
+            }
+          }
         }
       },
       "options": {
@@ -18,10 +22,10 @@
         "auth_type": "api_key"
       }
     },
-    "timeout": 24000000000,
+    "timeout": "24s",
     "max_retries": 3,
-    "retry_backoff_base": 1000000000,
+    "retry_backoff_base": "1s",
     "connection_pool_size": 10,
-    "connection_timeout": 9000000000
+    "connection_timeout": "9s"
   }
 }

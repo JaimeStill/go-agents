@@ -21,7 +21,7 @@ func NewVisionCapability(name string, options []CapabilityOption) *VisionCapabil
 	}
 }
 
-func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model ModelInfo
 		return nil, err
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 
 	return &protocols.Request{
 		Messages: messages,
@@ -40,7 +40,7 @@ func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model ModelInfo
 	}, nil
 }
 
-func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model 
 		return nil, err
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 	options["stream"] = true
 
 	return &protocols.Request{
