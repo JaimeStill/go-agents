@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 )
 
 type Protocol string
@@ -118,6 +119,34 @@ type EmbeddingsResponse struct {
 	Usage *TokenUsage `json:"usage,omitempty"`
 }
 
+type ToolsResponse struct {
+	ID      string      `json:"id,omitempty"`
+	Object  string      `json:"object,omitempty"`
+	Created int64       `json:"created,omitempty"`
+	Model   string      `json:"model"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role      string     `json:"role"`
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason,omitempty"`
+	} `json:"choices"`
+	Usage *TokenUsage `json:"usage,omitempty"`
+}
+
+type ToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ToolCallFunction `json:"function"`
+}
+
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 func ExtractOption[T any](options map[string]any, key string, defaultValue T) T {
 	if options == nil {
 		return defaultValue
@@ -128,4 +157,33 @@ func ExtractOption[T any](options map[string]any, key string, defaultValue T) T 
 		}
 	}
 	return defaultValue
+}
+
+func IsValid(p string) bool {
+	switch Protocol(p) {
+	case Chat, Vision, Tools, Embeddings, Audio, Realtime:
+		return true
+	default:
+		return false
+	}
+}
+
+func ProtocolStrings() string {
+	valid := ValidProtocols()
+	strs := make([]string, len(valid))
+	for i, p := range valid {
+		strs[i] = string(p)
+	}
+	return strings.Join(strs, ", ")
+}
+
+func ValidProtocols() []Protocol {
+	return []Protocol{
+		Chat,
+		Vision,
+		Tools,
+		Embeddings,
+		Audio,
+		Realtime,
+	}
 }

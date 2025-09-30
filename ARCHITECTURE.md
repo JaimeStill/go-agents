@@ -8,23 +8,23 @@ This document describes the current architecture and implementation patterns of 
 pkg/
 ├── config/              # Configuration management and loading
 │   ├── agent.go         # Agent configuration structure
-│   ├── model.go         # Model configuration with format selection
+│   ├── duration.go      # Custom Duration type with human-readable strings
+│   ├── model.go         # Model configuration with composable capabilities
 │   ├── provider.go      # Provider configuration structures
-│   ├── transport.go     # Transport layer configuration
-│   └── options.go       # Configuration option utilities
+│   └── transport.go     # Transport layer configuration
 ├── protocols/           # Protocol definitions and message structures
 │   └── protocol.go      # Protocol types, Message, Request, Response structures
 ├── capabilities/        # Protocol-specific capability implementations
 │   ├── capability.go    # Core capability interface and standard implementations
+│   ├── registry.go      # Thread-safe capability format registry
+│   ├── init.go          # Capability format registrations
 │   ├── chat.go          # Chat protocol capability
 │   ├── vision.go        # Vision protocol capability with structured content
 │   ├── tools.go         # Tools protocol capability
 │   └── embeddings.go    # Embeddings protocol capability
-├── models/              # Model abstraction and format management
-│   ├── model.go         # Model interface and core implementation
-│   ├── format.go        # ModelFormat definition and methods
-│   ├── openai.go        # OpenAI format implementations (Standard, Chat, Reasoning)
-│   └── registry.go      # Thread-safe model format registry
+├── models/              # Model abstraction and protocol handler composition
+│   ├── model.go         # Model interface and implementation
+│   └── handler.go       # ProtocolHandler for stateful capability management
 ├── providers/           # Provider implementations for different LLM services
 │   ├── provider.go      # Provider interface definition
 │   ├── base.go          # BaseProvider with common functionality
@@ -34,8 +34,7 @@ pkg/
 ├── transport/           # Transport layer orchestrating requests across providers
 │   └── client.go        # Transport client interface and implementation
 └── agent/               # High-level agent orchestration
-    ├── agent.go         # Agent interface and implementation
-    └── errors.go        # Agent-specific error definitions
+    └── agent.go         # Agent interface and implementation
 ```
 
 ## Core Components
@@ -71,6 +70,35 @@ type Request struct {
 }
 ```
 
+**Protocol-Specific Responses**: Different protocols return specialized response types:
+```go
+type ChatResponse struct {
+    Choices []struct {
+        Message Message
+    }
+    Usage *TokenUsage
+}
+
+type ToolsResponse struct {
+    Choices []struct {
+        Message struct {
+            Role      string
+            Content   string
+            ToolCalls []ToolCall
+        }
+    }
+    Usage *TokenUsage
+}
+
+type EmbeddingsResponse struct {
+    Data []struct {
+        Embedding []float64
+        Index     int
+    }
+    Usage *TokenUsage
+}
+```
+
 ### Capability System
 
 Capabilities implement protocol-specific behavior and validation for different API formats:
@@ -80,17 +108,33 @@ type Capability interface {
     Name() string
     Protocol() protocols.Protocol
     Options() []CapabilityOption
-    CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
-    CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error)
+    ValidateOptions(options map[string]any) error
+    ProcessOptions(options map[string]any) (map[string]any, error)
+    CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
     ParseResponse(data []byte) (any, error)
+    SupportsStreaming() bool
+}
+
+type StreamingCapability interface {
+    Capability
+    CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
+    ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error)
+    IsStreamComplete(data string) bool
 }
 ```
 
-**Capability Formats**: Different providers may use different API formats for the same protocol:
-- **OpenAI Chat Format**: Standard OpenAI chat completions API structure
-- **Anthropic Chat Format**: Claude-specific API structure (future)
-- **Ollama Native Format**: Native Ollama API structure (future)
-- **Custom Formats**: Provider-specific implementations
+**Capability Registry**: Thread-safe registration system for capability formats:
+```go
+func RegisterFormat(name string, factory CapabilityFactory)
+func GetFormat(name string) (Capability, error)
+```
+
+**Registered Capability Formats**:
+- **openai-chat**: Standard OpenAI chat completions (supports temperature, top_p, etc.)
+- **openai-vision**: OpenAI vision with structured content
+- **openai-tools**: OpenAI function calling (non-streaming)
+- **openai-embeddings**: OpenAI embeddings generation
+- **openai-reasoning**: OpenAI reasoning models (restricted parameters, max_completion_tokens only)
 
 **Option Management**: Each capability defines supported options with validation:
 ```go
@@ -103,26 +147,42 @@ type CapabilityOption struct {
 
 ### Model System
 
-Models represent LLM configurations with format-specific capability mappings:
+Models use composable capabilities with protocol-specific handlers:
 
 ```go
 type Model interface {
     Name() string
-    Format() *ModelFormat
-    Options() map[string]any
+    SupportsProtocol(p protocols.Protocol) bool
+    GetCapability(p protocols.Protocol) (capabilities.Capability, error)
+    GetProtocolOptions(p protocols.Protocol) map[string]any
+    UpdateProtocolOptions(p protocols.Protocol, options map[string]any) error
+    MergeRequestOptions(p protocols.Protocol, requestOptions map[string]any) map[string]any
 }
 ```
 
-**Model Formats**: Define capability combinations and format requirements:
-- **OpenAI Standard**: Uses OpenAI-format capabilities for all protocols
-- **OpenAI Chat**: Text completion using OpenAI chat format
-- **OpenAI Reasoning**: Reasoning models with OpenAI format but restricted parameters
-
-**Format Registry**: Thread-safe registration system for extensibility:
+**ProtocolHandler Pattern**: Manages stateful protocol configuration:
 ```go
-func RegisterFormat(name string, format *ModelFormat)
-func GetFormat(name string) (*ModelFormat, error)
+type ProtocolHandler struct {
+    capability capabilities.Capability  // Stateless behavior
+    options    map[string]any            // Stateful configuration
+}
 ```
+
+**Model Implementation**: Explicit protocol fields with handlers:
+```go
+type model struct {
+    name       string
+    chat       *ProtocolHandler  // nil if not configured
+    vision     *ProtocolHandler  // nil if not configured
+    tools      *ProtocolHandler  // nil if not configured
+    embeddings *ProtocolHandler  // nil if not configured
+}
+```
+
+**Option Management**:
+- **Configuration Options**: Set at model creation, persisted across requests
+- **Request Options**: Passed per-request, merged with configuration options
+- **Validation Timing**: Options validated after merge in transport layer
 
 ### Provider System
 
@@ -226,59 +286,122 @@ type Agent interface {
       "base_url": "http://localhost:11434",
       "model": {
         "name": "llama3.2:3b",
-        "format": "openai-standard",
-        "options": {
-          "max_tokens": 4096,
-          "temperature": 0.7,
-          "top_p": 0.95
+        "capabilities": {
+          "chat": {
+            "format": "openai-chat",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "top_p": 0.95
+            }
+          },
+          "tools": {
+            "format": "openai-tools",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
+            }
+          }
         }
       }
     },
-    "timeout": 60000000000,
+    "timeout": "24s",
     "max_retries": 3,
-    "connection_pool_size": 10
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
   }
 }
 ```
 
-### Model Format Selection
+**Duration Format**: Supports human-readable strings ("24s", "1m", "2h") or numeric nanoseconds:
+```go
+type Duration time.Duration
 
-Model formats determine available capabilities and their API format:
+func (d *Duration) UnmarshalJSON(data []byte) error {
+    // Try parsing as duration string first ("24s")
+    // Fall back to numeric nanoseconds
+}
+```
 
-- **openai-standard**: Complete capability set using OpenAI API format
-- **openai-chat**: Chat-only using OpenAI format with extended parameters
-- **openai-reasoning**: Reasoning models using OpenAI format with restricted parameters
+### Composable Capabilities
 
-Future formats could include:
-- **anthropic-standard**: Claude API format capabilities
-- **ollama-native**: Native Ollama API format capabilities
+Each protocol is configured independently with its own capability format and options:
 
-### Provider-Format Compatibility
+**Per-Protocol Configuration**:
+```json
+"capabilities": {
+  "chat": {
+    "format": "openai-chat",
+    "options": {"temperature": 0.7, "top_p": 0.95}
+  },
+  "tools": {
+    "format": "openai-tools",
+    "options": {"tool_choice": "auto"}
+  }
+}
+```
 
-Providers must be compatible with the capability formats used by models:
+**Benefits**:
+- **Option Isolation**: Each protocol has its own options (no conflicts)
+- **Selective Support**: Models declare only supported protocols
+- **Format Flexibility**: Different protocols can use different formats
+- **Runtime Updates**: Protocol options can be updated on live agents
+
+### Provider-Capability Compatibility
+
+Providers work with any capability format that matches their API endpoints:
 
 **Current Compatibility**:
-- **Ollama Provider** + **OpenAI Formats**: Uses OpenAI-compatible endpoints (`/v1/chat/completions`)
-- **Azure Provider** + **OpenAI Formats**: Native OpenAI API compatibility
+- **Ollama Provider**: Supports OpenAI-format capabilities via `/v1/*` endpoints
+- **Azure Provider**: Native OpenAI API compatibility
 
-**Future Compatibility Examples**:
-- **Ollama Provider** + **Ollama Native Formats**: Uses native Ollama endpoints (`/api/chat`)
-- **Anthropic Provider** + **Anthropic Formats**: Uses Claude API endpoints
-- **Custom Provider** + **Custom Formats**: Proprietary API integration
+**Future Extensibility**:
+- **Ollama Provider**: Could add native format support via `/api/*` endpoints
+- **Anthropic Provider**: Would support Anthropic-format capabilities
+- **Universal Provider**: Could detect and route to appropriate endpoints based on capability format
 
 ## Data Flow
 
 ### Standard Request Flow
 
 ```
-Agent.Chat() → Transport.ExecuteProtocol() → Capability.CreateRequest() (formats to API structure) → Provider.PrepareRequest() (routes + auth) → HTTP Request → Provider.ProcessResponse() → Capability.ParseResponse() → Agent Response
+Agent.Chat(prompt, options)
+  ↓
+Transport.ExecuteProtocol(protocol, messages, options)
+  ↓
+Model.MergeRequestOptions(protocol, options)  // Merge config + request options
+  ↓
+Capability.ValidateOptions(merged_options)    // Validate after merge
+  ↓
+Capability.CreateRequest(messages, merged_options)  // Format to API structure
+  ↓
+Provider.PrepareRequest(protocol, request)    // Route to endpoint + auth
+  ↓
+HTTP Request → Response
+  ↓
+Provider.ProcessResponse(response, capability)
+  ↓
+Capability.ParseResponse(data)  // Parse API-specific response
+  ↓
+Agent returns typed response
 ```
 
-### Format-Provider Separation
+### Capability-Protocol Flow
 
 ```
-Model Format (openai-standard) → OpenAI Chat Capability → OpenAI API Structure → Ollama Provider → /v1/chat/completions endpoint
-Model Format (ollama-native) → Ollama Chat Capability → Ollama API Structure → Ollama Provider → /api/chat endpoint
+Configuration: {"chat": {"format": "openai-chat", "options": {...}}}
+  ↓
+Model creates ProtocolHandler(OpenAIChatCapability, options)
+  ↓
+Request arrives with per-request options
+  ↓
+Merged options = config options + request options
+  ↓
+OpenAI Chat Capability formats to OpenAI API structure
+  ↓
+Ollama Provider routes to /v1/chat/completions endpoint
 ```
 
 ## Design Patterns
@@ -307,26 +430,13 @@ Capabilities are tightly coupled to specific API formats, enabling:
 - **Provider Independence**: Same capability works with any compatible provider
 - **Extension Flexibility**: New formats can be added without changing providers
 
-### Configuration-Driven Compatibility
+### Configuration-Driven Composition
 
-Compatibility between models and providers is determined by configuration:
-- **Model Format**: Determines which capability formats are used
-- **Provider Implementation**: Must support the endpoints/authentication required by those formats
-- **Runtime Validation**: Mismatches detected at agent creation time
-
-## Current Limitations
-
-### Option Validation Conflicts
-
-Model-level options are passed to all protocols, causing validation failures when protocols don't support certain options.
-
-**Planned Resolution**: Protocol-centric capability composition where each protocol has isolated options.
-
-### Format Proliferation
-
-Different capability combinations require separate model formats.
-
-**Planned Resolution**: Composable capabilities architecture allowing per-protocol format selection.
+Model capabilities are composed from registered formats:
+- **Capability Configuration**: Each protocol specifies its format and options
+- **Protocol Isolation**: Options are validated and managed per-protocol
+- **Provider Routing**: Providers route requests based on protocol and endpoint compatibility
+- **Runtime Flexibility**: Protocol options can be updated on live models
 
 ## Extension Points
 
@@ -335,33 +445,73 @@ Different capability combinations require separate model formats.
 1. Implement `Provider` interface with endpoint mapping and authentication
 2. Ensure compatibility with desired capability formats
 3. Register in provider registry
-4. No requirement for specific API format - works with any capability format
+4. Works with any capability format - just needs compatible endpoints
 
-### Adding New API Formats
-
-1. Implement capability interfaces for each protocol in the new format
-2. Create model formats that use these capabilities
-3. Ensure providers support required endpoints and authentication
-4. Register formats in format registry
-
-### Cross-Format Provider Support
-
-A single provider can support multiple API formats:
-
+Example:
 ```go
-func (p *FlexibleProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
-    // Determine endpoint based on model format being used
-    format := p.model.Format().Name()
+type CustomProvider struct {
+    *BaseProvider
+}
 
-    switch format {
-    case "openai-standard":
-        return p.openAIEndpoint(protocol), nil
-    case "native-format":
-        return p.nativeEndpoint(protocol), nil
-    default:
-        return "", fmt.Errorf("unsupported format: %s", format)
+func (p *CustomProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
+    // Map protocols to provider-specific endpoints
+    endpoints := map[protocols.Protocol]string{
+        protocols.Chat:   "/v1/chat/completions",
+        protocols.Vision: "/v1/chat/completions",
+        protocols.Tools:  "/v1/chat/completions",
     }
+    return p.BaseURL() + endpoints[protocol], nil
 }
 ```
 
-The architecture provides complete separation between API formats (handled by capabilities) and service integration (handled by providers), enabling maximum flexibility for supporting diverse LLM services and API standards.
+### Adding New Capability Formats
+
+1. Implement `Capability` interface for the new format
+2. Define protocol-specific options and validation
+3. Register format in capability registry using `init()`
+4. Use in model configuration
+
+Example:
+```go
+func init() {
+    RegisterFormat("anthropic-chat", func() Capability {
+        return NewAnthropicChatCapability()
+    })
+}
+```
+
+Configuration:
+```json
+"capabilities": {
+  "chat": {
+    "format": "anthropic-chat",
+    "options": {"max_tokens": 4096}
+  }
+}
+```
+
+### Multi-Protocol Configuration
+
+Models can compose capabilities from different formats:
+
+```json
+"model": {
+  "name": "multi-capability-model",
+  "capabilities": {
+    "chat": {
+      "format": "openai-chat",
+      "options": {"temperature": 0.7}
+    },
+    "tools": {
+      "format": "custom-tools",
+      "options": {"execution_mode": "sandbox"}
+    },
+    "embeddings": {
+      "format": "openai-embeddings",
+      "options": {"dimensions": 1536}
+    }
+  }
+}
+```
+
+The architecture provides complete separation between API formats (handled by capabilities), protocol configuration (handled by models), and service integration (handled by providers), enabling maximum flexibility for supporting diverse LLM services and API standards.

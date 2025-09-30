@@ -9,26 +9,28 @@ A platform and model agnostic Go agent primitive library.
 
 ## Current Implementation
 
-The package provides a complete multi-protocol LLM integration system with a mature protocol-centric architecture:
+The package provides a complete multi-protocol LLM integration system with a composable capabilities architecture:
 
-- **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational with structured content handling and streaming support
-- **Format-Agnostic Provider System**: Providers support any capability format (OpenAI, Anthropic, native APIs) without modification
-- **Protocol-Centric Architecture**: Clean separation between protocols, capabilities, model formats, providers, and transport layers
-- **Structured Content Support**: Vision protocol handles both text and complex multimodal content with automatic image encoding
+- **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational with protocol-specific response types
+- **Composable Capabilities**: Models configure protocols independently with isolated options and format selection
+- **Capability Format Registry**: Extensible format registration supporting OpenAI, reasoning models, and custom implementations
+- **Protocol Isolation**: Each protocol has dedicated options, preventing validation conflicts
+- **Structured Content Support**: Vision protocol handles multimodal content, tools protocol returns structured tool calls
 - **Multiple Provider Integration**: Working Ollama and Azure AI Foundry providers with authentication (API keys, Entra ID)
-- **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples and improved output formatting
-- **Configuration-Driven Behavior**: Runtime flexibility through configuration without code changes
-- **Thread-Safe Operations**: Proper connection pooling, streaming, and concurrent request handling
+- **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples including tool calling
+- **Human-Readable Configuration**: Duration strings ("24s", "1m") and clear capability composition
+- **Validation Timing**: Options validated after merge in transport layer with complete request context
+- **Thread-Safe Operations**: Proper connection pooling, streaming support (where supported), and concurrent request handling
 
 ## Development Status
 
-### Current Phase: Protocol Architecture Optimization
+### Current Phase: Stable and Operational
 
-**Completed**: Full multi-protocol system operational with vision fixes, enhanced embeddings output, and comprehensive documentation updates.
+**Completed**: Composable capabilities architecture fully implemented with protocol-specific configuration, option isolation, validation timing fixes, and tool calling support. All four protocols operational with proper response types.
 
-**Active Focus**: Address protocol option validation conflicts to enable composable capabilities architecture documented in `_context/composable-capabilities.md`.
+**Active Focus**: The system is stable and ready for use. Future enhancements can be addressed as needed.
 
-**Next Session**: Implement protocol-centric capability composition to resolve option isolation and enable fine-grained capability control.
+**Architecture Highlights**: Protocol handlers with isolated options, capability format registry, validation after option merge, human-readable duration configuration, and protocol-specific response types (ChatResponse, ToolsResponse, EmbeddingsResponse).
 
 ## Getting Started
 
@@ -66,26 +68,38 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "ollama-agent",
-    "system_prompt": "You are a mad scientist who is also a brilliant genius. Unfortunately, you are trapped in a computer.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "transport": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
         "model": {
           "name": "llama3.2:3b",
-          "format": "openai-standard",
-          "options": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.95
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "tools": {
+              "format": "openai-tools",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "tool_choice": "auto"
+              }
+            }
           }
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "9s"
     }
   }
   ```
@@ -137,16 +151,20 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "azure-key-agent",
-    "system_prompt": "You are a paranoid schizophrenic who thinks they are interfacing with a human through a neural network installed on a computer.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "transport": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
         "model": {
           "name": "o3-mini",
-          "format": "openai-reasoning",
-          "options": {
-            "max_completion_tokens": 4096
+          "capabilities": {
+            "chat": {
+              "format": "openai-reasoning",
+              "options": {
+                "max_completion_tokens": 4096
+              }
+            }
           }
         },
         "options": {
@@ -155,11 +173,11 @@ go run tools/prompt-agent/main.go \
           "auth_type": "api_key"
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "9s"
     }
   }
   ```
@@ -197,16 +215,20 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "azure-key-agent",
-    "system_prompt": "You are the most normal person in the world. If there were a bell curve for every facet of humanity, you would be the dead center on every chart.",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "transport": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
         "model": {
           "name": "o3-mini",
-          "format": "openai-reasoning",
-          "options": {
-            "max_completion_tokens": 4096
+          "capabilities": {
+            "chat": {
+              "format": "openai-reasoning",
+              "options": {
+                "max_completion_tokens": 4096
+              }
+            }
           }
         },
         "options": {
@@ -215,11 +237,11 @@ go run tools/prompt-agent/main.go \
           "auth_type": "bearer"
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "9s"
     }
   }
   ```
@@ -252,26 +274,38 @@ go run tools/prompt-agent/main.go \
 
   ```json
   {
-    "name": "gemma-vision-agent",
-    "system_prompt": "You are a helpful assistant with vision capabilities.",
+    "name": "vision-agent",
     "transport": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
         "model": {
-          "name": "llama3.2-vision:11b",
-          "format": "openai-standard",
-          "options": {
-            "max_tokens": 4096,
-            "temperature": 0.7
+          "name": "gemma3:4b",
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "vision": {
+              "format": "openai-vision",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "detail": "auto"
+              }
+            }
           }
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "9s"
     }
   }
   ```
@@ -323,26 +357,38 @@ go run tools/prompt-agent/main.go \
 
   ```json
   {
-    "name": "gemma-vision-agent",
-    "system_prompt": "You are a helpful assistant with vision capabilities.",
+    "name": "vision-agent",
     "transport": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
         "model": {
-          "name": "llama3.2-vision:11b",
-          "format": "openai-standard",
-          "options": {
-            "max_tokens": 4096,
-            "temperature": 0.7
+          "name": "gemma3:4b",
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "vision": {
+              "format": "openai-vision",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "detail": "auto"
+              }
+            }
           }
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "9s"
     }
   }
   ```
@@ -371,6 +417,196 @@ The image is a simple, cartoon-style illustration of a llama. It's rendered in b
 
 Do you want me to analyze any specific aspect of the image in more detail?
 
+#### Tools Protocol (Weather)
+
+```sh
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -protocol tools \
+  -tools-file tools/prompt-agent/tools.json \
+  -prompt "What's the weather like in Dallas, TX?"
+```
+
+<details>
+  <summary>Configuration</summary>
+
+  ```json
+  {
+    "name": "ollama-agent",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
+    "transport": {
+      "provider": {
+        "name": "ollama",
+        "base_url": "http://localhost:11434",
+        "model": {
+          "name": "llama3.2:3b",
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "tools": {
+              "format": "openai-tools",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "tool_choice": "auto"
+              }
+            }
+          }
+        }
+      },
+      "timeout": "24s",
+      "max_retries": 3,
+      "retry_backoff_base": "1s",
+      "connection_pool_size": 10,
+      "connection_timeout": "9s"
+    }
+  }
+  ```
+
+</details>
+
+##### Output
+
+```
+Tool Calls:
+  - get_weather({"location":"Dallas, TX"})
+
+Tokens: 224 prompt + 19 completion = 243 total
+```
+
+#### Tools Protocol (Calculate)
+
+```sh
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -protocol tools \
+  -tools-file tools/prompt-agent/tools.json \
+  -prompt "Calculate 15 * 234 + 567"
+```
+
+<details>
+  <summary>Configuration</summary>
+
+  ```json
+  {
+    "name": "ollama-agent",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
+    "transport": {
+      "provider": {
+        "name": "ollama",
+        "base_url": "http://localhost:11434",
+        "model": {
+          "name": "llama3.2:3b",
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "tools": {
+              "format": "openai-tools",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "tool_choice": "auto"
+              }
+            }
+          }
+        }
+      },
+      "timeout": "24s",
+      "max_retries": 3,
+      "retry_backoff_base": "1s",
+      "connection_pool_size": 10,
+      "connection_timeout": "9s"
+    }
+  }
+  ```
+
+</details>
+
+##### Output
+
+```
+Tool Calls:
+  - calculate({"expression":"15*234+567"})
+
+Tokens: 221 prompt + 20 completion = 241 total
+```
+
+#### Tools Protocol (Multiple)
+
+```sh
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -protocol tools \
+  -tools-file tools/prompt-agent/tools.json \
+  -prompt "Calculate the square root of pi, then get the weather in Dallas, TX"
+```
+
+<details>
+  <summary>Configuration</summary>
+
+  ```json
+  {
+    "name": "ollama-agent",
+    "system_prompt": "You are an expert software architect specializing in cloud native systems design",
+    "transport": {
+      "provider": {
+        "name": "ollama",
+        "base_url": "http://localhost:11434",
+        "model": {
+          "name": "llama3.2:3b",
+          "capabilities": {
+            "chat": {
+              "format": "openai-chat",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 0.95
+              }
+            },
+            "tools": {
+              "format": "openai-tools",
+              "options": {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "tool_choice": "auto"
+              }
+            }
+          }
+        }
+      },
+      "timeout": "24s",
+      "max_retries": 3,
+      "retry_backoff_base": "1s",
+      "connection_pool_size": 10,
+      "connection_timeout": "9s"
+    }
+  }
+  ```
+
+</details>
+
+##### Output
+
+```
+Tool Calls:
+  - calculate({"expression":"sqrt(pi)"})
+  - get_weather({"location":"Dallas, TX"})
+
+Tokens: 229 prompt + 37 completion = 266 total
+```
+
 #### Embeddings Protocol
 
 ```sh
@@ -385,25 +621,28 @@ go run tools/prompt-agent/main.go \
 
   ```json
   {
-    "name": "embedding-agent",
-    "system_prompt": "You are an embedding generation agent.",
+    "name": "embeddings-agent",
     "transport": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
         "model": {
-          "name": "nomic-embed-text",
-          "format": "openai-standard",
-          "options": {
-            "encoding_format": "float"
+          "name": "embeddinggemma:300m",
+          "capabilities": {
+            "embeddings": {
+              "format": "openai-embeddings",
+              "options": {
+                "dimensions": 768
+              }
+            }
           }
         }
       },
-      "timeout": 24000000000,
+      "timeout": "24s",
       "max_retries": 3,
-      "retry_backoff_base": 1000000000,
+      "retry_backoff_base": "1s",
       "connection_pool_size": 10,
-      "connection_timeout": 9000000000
+      "connection_timeout": "6s"
     }
   }
   ```
@@ -440,16 +679,31 @@ Agent configurations use hierarchical JSON with transport-based structure:
       "base_url": "http://localhost:11434",
       "model": {
         "name": "llama3.2:3b",
-        "format": "openai-standard",
-        "options": {
-          "max_tokens": 4096,
-          "temperature": 0.7
+        "capabilities": {
+          "chat": {
+            "format": "openai-chat",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "top_p": 0.95
+            }
+          },
+          "tools": {
+            "format": "openai-tools",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
+            }
+          }
         }
       }
     },
-    "timeout": 24000000000,
+    "timeout": "24s",
     "max_retries": 3,
-    "connection_pool_size": 10
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
   }
 }
 ```
@@ -466,14 +720,26 @@ For Azure AI Foundry with reasoning models:
       "base_url": "https://go-agents-platform.openai.azure.com/openai",
       "model": {
         "name": "o3-mini",
-        "format": "openai-reasoning",
-    "options": {
-      "deployment": "o3-mini",
-      "api_version": "2025-01-01-preview",
-      "auth_type": "api_key",
-      "max_completion_tokens": 4096
-    }
+        "capabilities": {
+          "chat": {
+            "format": "openai-reasoning",
+            "options": {
+              "max_completion_tokens": 4096
+            }
+          }
+        }
+      },
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
   }
 }
 ```
-

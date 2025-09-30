@@ -21,13 +21,13 @@ func NewChatCapability(name string, options []CapabilityOption) *ChatCapability 
 	}
 }
 
-func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 
 	return &protocols.Request{
 		Messages: req.Messages,
@@ -35,13 +35,13 @@ func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) 
 	}, nil
 }
 
-func (c *ChatCapability) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *ChatCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 	options["stream"] = true
 
 	return &protocols.Request{

@@ -67,22 +67,34 @@ func (c *client) Model() models.Model {
 
 func (c *client) HTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: c.config.Timeout,
+		Timeout: c.config.Timeout.ToDuration(),
 		Transport: &http.Transport{
 			MaxIdleConns:        c.config.ConnectionPoolSize,
 			MaxIdleConnsPerHost: c.config.ConnectionPoolSize,
-			IdleConnTimeout:     c.config.ConnectionTimeout,
+			IdleConnTimeout:     c.config.ConnectionTimeout.ToDuration(),
 		},
 	}
 }
 
 func (c *client) ExecuteProtocol(ctx context.Context, req *capabilities.CapabilityRequest) (any, error) {
-	capability, err := c.provider.Model().GetCapability(req.Protocol)
+	capability, err := c.model.GetCapability(req.Protocol)
 	if err != nil {
 		return nil, fmt.Errorf("capability selection failed: %w", err)
 	}
 
-	return c.execute(ctx, capability, req)
+	options := c.model.MergeRequestOptions(req.Protocol, req.Options)
+
+	if err := capability.ValidateOptions(options); err != nil {
+		return nil, fmt.Errorf("invalid options for %s protocol: %w", req.Protocol, err)
+	}
+
+	request := &capabilities.CapabilityRequest{
+		Protocol: req.Protocol,
+		Messages: req.Messages,
+		Options:  options,
+	}
+
+	return c.execute(ctx, capability, request)
 }
 
 func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
@@ -96,7 +108,19 @@ func (c *client) ExecuteProtocolStream(ctx context.Context, req *capabilities.Ca
 		return nil, fmt.Errorf("capability %s does not support streaming", capability.Name())
 	}
 
-	return c.executeStream(ctx, streaming, req)
+	options := c.model.MergeRequestOptions(req.Protocol, req.Options)
+
+	if err := capability.ValidateOptions(options); err != nil {
+		return nil, fmt.Errorf("invalid options for %s protocol: %w", req.Protocol, err)
+	}
+
+	request := &capabilities.CapabilityRequest{
+		Protocol: req.Protocol,
+		Messages: req.Messages,
+		Options:  options,
+	}
+
+	return c.executeStream(ctx, streaming, request)
 }
 
 func (c *client) IsHealthy() bool {
@@ -106,9 +130,7 @@ func (c *client) IsHealthy() bool {
 }
 
 func (c *client) execute(ctx context.Context, capability capabilities.Capability, req *capabilities.CapabilityRequest) (any, error) {
-	model := c.provider.Model()
-
-	capRequest, err := capability.CreateRequest(req, model)
+	capRequest, err := capability.CreateRequest(req, c.model.Name())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -153,9 +175,7 @@ func (c *client) execute(ctx context.Context, capability capabilities.Capability
 }
 
 func (c *client) executeStream(ctx context.Context, capability capabilities.StreamingCapability, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error) {
-	model := c.provider.Model()
-
-	capRequest, err := capability.CreateStreamingRequest(req, model)
+	capRequest, err := capability.CreateStreamingRequest(req, c.model.Name())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streaming request: %w", err)
 	}
@@ -195,20 +215,20 @@ func (c *client) executeStream(ctx context.Context, capability capabilities.Stre
 		return nil, err
 	}
 
-	outStream := make(chan protocols.StreamingChunk)
+	output := make(chan protocols.StreamingChunk)
 	go func() {
-		defer close(outStream)
+		defer close(output)
 		defer resp.Body.Close()
 
 		for data := range stream {
 			if chunk, ok := data.(*protocols.StreamingChunk); ok {
-				outStream <- *chunk
+				output <- *chunk
 			}
 		}
 		c.setHealthy(true)
 	}()
 
-	return outStream, nil
+	return output, nil
 }
 
 func (c *client) setHealthy(healthy bool) {

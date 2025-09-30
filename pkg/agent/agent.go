@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/JaimeStill/go-agents/pkg/capabilities"
@@ -18,16 +19,15 @@ type Agent interface {
 	Provider() providers.Provider
 	Model() models.Model
 
-	Chat(ctx context.Context, prompt string) (*protocols.ChatResponse, error)
-	ChatStream(ctx context.Context, prompt string) (<-chan protocols.StreamingChunk, error)
+	Chat(ctx context.Context, prompt string, opts ...map[string]any) (*protocols.ChatResponse, error)
+	ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
 
-	Vision(ctx context.Context, prompt string, images []string) (*protocols.ChatResponse, error)
-	VisionStream(ctx context.Context, prompt string, images []string) (<-chan protocols.StreamingChunk, error)
+	Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error)
+	VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
 
-	Tools(ctx context.Context, prompt string, tools []Tool) (*protocols.ChatResponse, error)
-	ToolsStream(ctx context.Context, prompt string, tools []Tool) (<-chan protocols.StreamingChunk, error)
+	Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error)
 
-	Embed(ctx context.Context, input string) (*protocols.EmbeddingsResponse, error)
+	Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error)
 }
 
 type agent struct {
@@ -61,13 +61,18 @@ func (a *agent) Model() models.Model {
 	return a.client.Model()
 }
 
-func (a *agent) Chat(ctx context.Context, prompt string) (*protocols.ChatResponse, error) {
+func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*protocols.ChatResponse, error) {
 	messages := a.initMessages(prompt)
+
+	options := make(map[string]any)
+	if len(opts) > 0 && opts[0] != nil {
+		options = opts[0]
+	}
 
 	req := &capabilities.CapabilityRequest{
 		Protocol: protocols.Chat,
 		Messages: messages,
-		Options:  a.Model().Options(),
+		Options:  options,
 	}
 
 	result, err := a.client.ExecuteProtocol(ctx, req)
@@ -83,10 +88,14 @@ func (a *agent) Chat(ctx context.Context, prompt string) (*protocols.ChatRespons
 	return response, nil
 }
 
-func (a *agent) ChatStream(ctx context.Context, prompt string) (<-chan protocols.StreamingChunk, error) {
+func (a *agent) ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
-	options := a.Model().Options()
+	options := make(map[string]any)
+	if len(opts) > 0 && opts[0] != nil {
+		options = opts[0]
+	}
+
 	options["stream"] = true
 
 	req := &capabilities.CapabilityRequest{
@@ -98,7 +107,7 @@ func (a *agent) ChatStream(ctx context.Context, prompt string) (<-chan protocols
 	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
-func (a *agent) Vision(ctx context.Context, prompt string, images []string) (*protocols.ChatResponse, error) {
+func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error) {
 	messages := a.initMessages(prompt)
 
 	// Convert []string to []any for capability processing
@@ -107,8 +116,13 @@ func (a *agent) Vision(ctx context.Context, prompt string, images []string) (*pr
 		imageList[i] = img
 	}
 
-	options := a.Model().Options()
-	options["images"] = imageList
+	options := map[string]any{
+		"images": imageList,
+	}
+
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
 
 	req := &capabilities.CapabilityRequest{
 		Protocol: protocols.Vision,
@@ -129,7 +143,7 @@ func (a *agent) Vision(ctx context.Context, prompt string, images []string) (*pr
 	return response, nil
 }
 
-func (a *agent) VisionStream(ctx context.Context, prompt string, images []string) (<-chan protocols.StreamingChunk, error) {
+func (a *agent) VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
 	// Convert []string to []any for capability processing
@@ -138,8 +152,14 @@ func (a *agent) VisionStream(ctx context.Context, prompt string, images []string
 		imageList[i] = img
 	}
 
-	options := a.Model().Options()
-	options["images"] = imageList
+	options := map[string]any{
+		"images": imageList,
+	}
+
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
+
 	options["stream"] = true
 
 	req := &capabilities.CapabilityRequest{
@@ -151,11 +171,16 @@ func (a *agent) VisionStream(ctx context.Context, prompt string, images []string
 	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
-func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool) (*protocols.ChatResponse, error) {
+func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error) {
 	messages := a.initMessages(prompt)
 
-	options := a.Model().Options()
-	options["tools"] = setToolDefinitions(tools)
+	options := map[string]any{
+		"tools": setToolDefinitions(tools),
+	}
+
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
 
 	req := &capabilities.CapabilityRequest{
 		Protocol: protocols.Tools,
@@ -168,7 +193,7 @@ func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool) (*protoc
 		return nil, err
 	}
 
-	response, ok := result.(*protocols.ChatResponse)
+	response, ok := result.(*protocols.ToolsResponse)
 	if !ok {
 		return nil, fmt.Errorf("unexpected response type")
 	}
@@ -176,25 +201,14 @@ func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool) (*protoc
 	return response, nil
 }
 
-func (a *agent) ToolsStream(ctx context.Context, prompt string, tools []Tool) (<-chan protocols.StreamingChunk, error) {
-	messages := a.initMessages(prompt)
-
-	options := a.Model().Options()
-	options["tools"] = setToolDefinitions(tools)
-	options["stream"] = true
-
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Tools,
-		Messages: messages,
-		Options:  options,
+func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error) {
+	options := map[string]any{
+		"input": input,
 	}
 
-	return a.client.ExecuteProtocolStream(ctx, req)
-}
-
-func (a *agent) Embed(ctx context.Context, input string) (*protocols.EmbeddingsResponse, error) {
-	options := a.Model().Options()
-	options["input"] = input
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
 
 	req := &capabilities.CapabilityRequest{
 		Protocol: protocols.Embeddings,
@@ -215,12 +229,12 @@ func (a *agent) Embed(ctx context.Context, input string) (*protocols.EmbeddingsR
 	return response, nil
 }
 
-func setToolDefinitions(tools []Tool) []map[string]any {
-	defs := make([]map[string]any, len(tools))
+func setToolDefinitions(tools []Tool) []capabilities.FunctionDefinition {
+	defs := make([]capabilities.FunctionDefinition, len(tools))
 	for i, tool := range tools {
-		defs[i] = map[string]any{
-			"type": "function",
-			"function": map[string]any{
+		defs[i] = capabilities.FunctionDefinition{
+			Type: "function",
+			Function: map[string]any{
 				"name":        tool.Name,
 				"description": tool.Description,
 				"parameters":  tool.Parameters,

@@ -20,13 +20,13 @@ func NewEmbeddingsCapability(name string, options []CapabilityOption) *Embedding
 	}
 }
 
-func (c *EmbeddingsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *EmbeddingsCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
 	}
 
-	options["model"] = model.Name()
+	options["model"] = model
 
 	return &protocols.Request{
 		Messages: req.Messages,

@@ -13,12 +13,12 @@ type FunctionDefinition struct {
 }
 
 type ToolsCapability struct {
-	*StandardStreamingCapability
+	*StandardCapability
 }
 
 func NewToolsCapability(name string, options []CapabilityOption) *ToolsCapability {
 	return &ToolsCapability{
-		StandardStreamingCapability: NewStandardStreamingCapability(
+		StandardCapability: NewStandardCapability(
 			name,
 			protocols.Tools,
 			options,
@@ -26,7 +26,7 @@ func NewToolsCapability(name string, options []CapabilityOption) *ToolsCapabilit
 	}
 }
 
-func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
+func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
 		return nil, err
@@ -37,27 +37,7 @@ func (c *ToolsCapability) CreateRequest(req *CapabilityRequest, model ModelInfo)
 		return nil, fmt.Errorf("tools must be a non-empty array of FunctionDefinition")
 	}
 
-	options["model"] = model.Name()
-
-	return &protocols.Request{
-		Messages: req.Messages,
-		Options:  options,
-	}, nil
-}
-
-func (c *ToolsCapability) CreateStreamingRequest(req *CapabilityRequest, model ModelInfo) (*protocols.Request, error) {
-	options, err := c.ProcessOptions(req.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	tools, ok := options["tools"].([]FunctionDefinition)
-	if !ok || len(tools) == 0 {
-		return nil, fmt.Errorf("tools must be a non-empty array of FunctionDefinition")
-	}
-
-	options["model"] = model.Name()
-	options["stream"] = true
+	options["model"] = model
 
 	return &protocols.Request{
 		Messages: req.Messages,
@@ -66,7 +46,7 @@ func (c *ToolsCapability) CreateStreamingRequest(req *CapabilityRequest, model M
 }
 
 func (c *ToolsCapability) ParseResponse(data []byte) (any, error) {
-	var response protocols.ChatResponse
+	var response protocols.ToolsResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, err
 	}
