@@ -25,8 +25,7 @@ type Agent interface {
 	Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error)
 	VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
 
-	Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ChatResponse, error)
-	ToolsStream(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
+	Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error)
 
 	Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error)
 }
@@ -172,7 +171,7 @@ func (a *agent) VisionStream(ctx context.Context, prompt string, images []string
 	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
-func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ChatResponse, error) {
+func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error) {
 	messages := a.initMessages(prompt)
 
 	options := map[string]any{
@@ -194,34 +193,12 @@ func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...
 		return nil, err
 	}
 
-	response, ok := result.(*protocols.ChatResponse)
+	response, ok := result.(*protocols.ToolsResponse)
 	if !ok {
 		return nil, fmt.Errorf("unexpected response type")
 	}
 
 	return response, nil
-}
-
-func (a *agent) ToolsStream(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (<-chan protocols.StreamingChunk, error) {
-	messages := a.initMessages(prompt)
-
-	options := map[string]any{
-		"tools": setToolDefinitions(tools),
-	}
-
-	if len(opts) > 0 && opts[0] != nil {
-		maps.Copy(options, opts[0])
-	}
-
-	options["stream"] = true
-
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Tools,
-		Messages: messages,
-		Options:  options,
-	}
-
-	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
 func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error) {
@@ -252,12 +229,12 @@ func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any)
 	return response, nil
 }
 
-func setToolDefinitions(tools []Tool) []map[string]any {
-	defs := make([]map[string]any, len(tools))
+func setToolDefinitions(tools []Tool) []capabilities.FunctionDefinition {
+	defs := make([]capabilities.FunctionDefinition, len(tools))
 	for i, tool := range tools {
-		defs[i] = map[string]any{
-			"type": "function",
-			"function": map[string]any{
+		defs[i] = capabilities.FunctionDefinition{
+			Type: "function",
+			Function: map[string]any{
 				"name":        tool.Name,
 				"description": tool.Description,
 				"parameters":  tool.Parameters,

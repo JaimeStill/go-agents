@@ -29,7 +29,6 @@ func init() {
 			{Option: "tool_choice", Required: false, DefaultValue: "auto"},
 			{Option: "max_tokens", Required: false, DefaultValue: 4096},
 			{Option: "temperature", Required: false, DefaultValue: 0.7},
-			{Option: "stream", Required: false, DefaultValue: false},
 		})
 	})
 

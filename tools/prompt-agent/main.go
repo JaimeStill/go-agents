@@ -84,11 +84,7 @@ func main() {
 			log.Fatal("Error: -tools-file flag is required for tools protocol")
 		}
 		toolList := loadTools(*toolsFile)
-		if *stream {
-			executeToolsStream(ctx, a, *prompt, toolList)
-		} else {
-			executeTools(ctx, a, *prompt, toolList)
-		}
+		executeTools(ctx, a, *prompt, toolList)
 	case "embeddings":
 		executeEmbeddings(ctx, a, *prompt)
 	default:
@@ -165,30 +161,29 @@ func executeTools(ctx context.Context, agent agent.Agent, prompt string, tools [
 	if err != nil {
 		log.Fatalf("Tools failed: %v", err)
 	}
-	fmt.Printf("Tools response: %s\n", response.Content())
+
+	if len(response.Choices) > 0 {
+		message := response.Choices[0].Message
+
+		if message.Content != "" {
+			fmt.Printf("Response: %s\n", message.Content)
+		}
+
+		if len(message.ToolCalls) > 0 {
+			fmt.Printf("\nTool Calls:\n")
+			for _, toolCall := range message.ToolCalls {
+				fmt.Printf("  - %s(%s)\n", toolCall.Function.Name, toolCall.Function.Arguments)
+			}
+		}
+	}
+
 	if response.Usage != nil {
-		fmt.Printf(
-			"Tokens: %d prompt + %d completion = %d total\n",
+		fmt.Printf("\nTokens: %d prompt + %d completion = %d total\n",
 			response.Usage.PromptTokens,
 			response.Usage.CompletionTokens,
 			response.Usage.TotalTokens,
 		)
 	}
-}
-
-func executeToolsStream(ctx context.Context, agent agent.Agent, prompt string, tools []agent.Tool) {
-	stream, err := agent.ToolsStream(ctx, prompt, tools)
-	if err != nil {
-		log.Fatalf("ToolsStream failed: %v", err)
-	}
-
-	for chunk := range stream {
-		if chunk.Error != nil {
-			log.Fatalf("Stream error: %v", chunk.Error)
-		}
-		fmt.Print(chunk.Content())
-	}
-	fmt.Println()
 }
 
 func executeEmbeddings(ctx context.Context, agent agent.Agent, input string) {

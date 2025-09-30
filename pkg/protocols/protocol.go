@@ -119,6 +119,34 @@ type EmbeddingsResponse struct {
 	Usage *TokenUsage `json:"usage,omitempty"`
 }
 
+type ToolsResponse struct {
+	ID      string      `json:"id,omitempty"`
+	Object  string      `json:"object,omitempty"`
+	Created int64       `json:"created,omitempty"`
+	Model   string      `json:"model"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role      string     `json:"role"`
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason,omitempty"`
+	} `json:"choices"`
+	Usage *TokenUsage `json:"usage,omitempty"`
+}
+
+type ToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ToolCallFunction `json:"function"`
+}
+
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 func ExtractOption[T any](options map[string]any, key string, defaultValue T) T {
 	if options == nil {
 		return defaultValue

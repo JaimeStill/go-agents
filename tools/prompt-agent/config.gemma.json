@@ -22,14 +22,6 @@
               "temperature": 0.7,
               "detail": "auto"
             }
-          },
-          "tools": {
-            "format": "openai-tools",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
           }
         }
       }
