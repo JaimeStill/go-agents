@@ -206,6 +206,55 @@ These features are outside the current MVP scope but may be added in future rele
 - Inference API integration
 - Model hub browsing
 
+## Publishing and Versioning
+
+Once MVP completion is achieved (testing and documentation complete), the library will be published as a pre-release.
+
+### Pre-Release Strategy
+
+**Version Numbering**:
+- Pre-release versions: `v0.1.0`, `v0.2.0`, etc.
+- Release candidates: `v1.0.0-rc.1`, `v1.0.0-rc.2`, etc.
+- Stable release: `v1.0.0`
+
+**Publishing Checklist**:
+- [ ] All unit tests passing with 80%+ coverage
+- [ ] All integration tests passing
+- [ ] Complete package documentation (godoc)
+- [ ] README updated with installation and usage instructions
+- [ ] ARCHITECTURE.md reflects current implementation
+- [ ] CHANGELOG.md created with version history
+- [ ] Git tags for semantic versioning
+- [ ] GitHub release with release notes
+
+**Versioning Philosophy**:
+- Follow [Semantic Versioning 2.0.0](https://semver.org/)
+- Pre-1.0 versions (v0.x.x) may introduce breaking changes between minor versions
+- Post-1.0 versions guarantee backward compatibility within major versions
+- Breaking changes require major version bump (e.g., v1.x.x → v2.0.0)
+
+**Go Module Publishing**:
+```bash
+# Tag the release
+git tag v0.1.0
+git push origin v0.1.0
+
+# Go modules will automatically pick up the tagged version
+# Users can install with: go get github.com/JaimeStill/go-agents@v0.1.0
+```
+
+**Feedback Period**:
+- Maintain v0.x.x series for at least 2-3 months
+- Gather community feedback on API design
+- Make necessary breaking changes before v1.0.0
+- Stabilize API surface for v1.0.0 release
+
+**Pre-1.0 Communication**:
+- Clearly mark as pre-release in README
+- Document expected stability and breaking change policy
+- Provide migration guides for breaking changes
+- Maintain CHANGELOG with detailed upgrade notes
+
 ## Supplemental Package Roadmap
 
 These packages build upon the core `go-agents` library to provide higher-level functionality:
