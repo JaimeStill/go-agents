@@ -515,3 +515,141 @@ Models can compose capabilities from different formats:
 ```
 
 The architecture provides complete separation between API formats (handled by capabilities), protocol configuration (handled by models), and service integration (handled by providers), enabling maximum flexibility for supporting diverse LLM services and API standards.
+
+## Testing Strategy
+
+### Test Organization
+
+Tests are organized in a separate `tests/` directory that mirrors the `pkg/` structure:
+
+```
+tests/
+├── config/
+│   ├── duration_test.go
+│   ├── options_test.go
+│   ├── model_test.go
+│   ├── provider_test.go
+│   ├── transport_test.go
+│   └── agent_test.go
+├── protocols/
+│   └── protocol_test.go
+├── capabilities/
+│   └── ...
+└── ...
+```
+
+**Rationale**: Separating tests from production code keeps the `pkg/` directory clean and focused on implementation.
+
+### Black-Box Testing
+
+All tests use black-box testing approach with `package <name>_test`:
+
+```go
+package config_test
+
+import (
+    "testing"
+    "github.com/JaimeStill/go-agents/pkg/config"
+)
+```
+
+**Benefits**:
+- Tests validate the public API from a consumer perspective
+- Cannot access unexported members, ensuring tests reflect real usage
+- Encourages well-designed public interfaces
+- Internal refactoring doesn't break tests
+- Reduces test volume by focusing only on public functionality
+
+### Test Patterns
+
+**Table-Driven Tests**: Used for testing multiple scenarios with different inputs:
+
+```go
+func TestDuration_UnmarshalJSON(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected time.Duration
+    }{
+        {name: "seconds", input: `"24s"`, expected: 24 * time.Second},
+        {name: "minutes", input: `"1m"`, expected: 1 * time.Minute},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // test implementation
+        })
+    }
+}
+```
+
+**HTTP Mocking**: Use `httptest.Server` for mocking provider responses:
+
+```go
+func TestProvider_Request(t *testing.T) {
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // mock response
+        json.NewEncoder(w).Encode(mockResponse)
+    }))
+    defer server.Close()
+
+    // test with server.URL
+}
+```
+
+### Coverage Requirements
+
+**Minimum Coverage**: 80% across all packages
+
+**Critical Path Coverage**: 100% for:
+- Request/response parsing (protocols package)
+- Configuration validation (config package)
+- Protocol routing (transport package)
+- Option merging and validation (models, transport)
+
+**Coverage Commands**:
+```bash
+# Generate coverage for specific package
+go test ./tests/config/... -coverprofile=coverage.out -coverpkg=./pkg/config/...
+
+# Generate coverage for all packages
+go test ./tests/... -coverprofile=coverage.out -coverpkg=./pkg/...
+
+# View coverage summary
+go tool cover -func=coverage.out
+
+# Generate HTML coverage report
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### Integration Validation
+
+**No Automated Integration Tests**: The library does not include automated integration tests that require live LLM providers or credentials.
+
+**Manual Validation**: Integration validation is performed manually using the `tools/prompt-agent` CLI utility:
+
+```bash
+# Test Ollama integration
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -prompt "Test prompt"
+
+# Test Azure integration
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.azure.json \
+  -token $AZURE_API_KEY \
+  -prompt "Test prompt"
+```
+
+**Validation Approach**:
+- README examples serve as integration test cases
+- All examples are executable via `tools/prompt-agent`
+- If README examples execute successfully, integration works
+- No credential management in test suite
+- No live service dependencies in CI/CD
+
+**When to Run Validation**:
+- Before releases
+- After provider-specific changes
+- When adding new capability formats
+- To verify configuration changes

@@ -226,3 +226,182 @@ All documentation should be written in a clear, objective, and factual manner wi
 - Document the contract interface clearly to guide implementers
 
 **Example**: `pkg/capabilities` defines `ModelInfo` interface with `Name()` and `Options()` methods that `pkg/models` implements, allowing capabilities to work with models without importing the models package.
+
+## Testing Strategy and Conventions
+
+### Test Organization Structure
+**Principle**: Tests are organized in a separate `tests/` directory that mirrors the `pkg/` structure, keeping production code clean and focused.
+
+**Rationale**: Separating tests from implementation prevents `pkg/` directories from being cluttered with test files. This separation makes the codebase easier to navigate and ensures the package structure reflects production architecture rather than test organization.
+
+**Implementation**:
+- Create `tests/<package>/` directories corresponding to each `pkg/<package>/`
+- Test files follow Go naming convention: `<file>_test.go`
+- Test directory structure mirrors package structure exactly
+
+**Example**:
+```
+tests/
+├── config/
+│   ├── duration_test.go      # Tests for pkg/config/duration.go
+│   ├── options_test.go       # Tests for pkg/config/options.go
+│   └── agent_test.go         # Tests for pkg/config/agent.go
+├── protocols/
+│   └── protocol_test.go
+└── capabilities/
+    └── chat_test.go
+```
+
+### Black-Box Testing Approach
+**Principle**: All tests use black-box testing with `package <name>_test`, testing only the public API.
+
+**Rationale**: Black-box tests validate the library from a consumer perspective, ensuring the public API behaves correctly. This approach prevents tests from depending on internal implementation details, makes refactoring safer, and reduces test volume by focusing only on exported functionality.
+
+**Implementation**:
+- Use `package <name>_test` in all test files
+- Import the package being tested: `import "github.com/JaimeStill/go-agents/pkg/<package>"`
+- Test only exported types, functions, and methods
+- Cannot access unexported members (compile error if attempted)
+- If testing unexported functionality seems necessary, the functionality should probably be exported
+
+**Example**:
+```go
+package config_test
+
+import (
+    "testing"
+    "github.com/JaimeStill/go-agents/pkg/config"
+)
+
+func TestDuration_UnmarshalJSON(t *testing.T) {
+    var d config.Duration  // Can only use exported types
+    // Test implementation
+}
+```
+
+### Table-Driven Test Pattern
+**Principle**: Use table-driven tests for testing multiple scenarios with different inputs.
+
+**Rationale**: Table-driven tests reduce code duplication, make test cases easy to add or modify, and provide clear documentation of expected behavior across different inputs. They're the idiomatic Go testing pattern for parameterized tests.
+
+**Implementation**:
+- Define test cases as a slice of structs with `name`, input fields, and `expected` output
+- Iterate over test cases using `t.Run(tt.name, ...)` for isolated subtests
+- Each subtest runs independently with clear failure reporting
+
+**Example**:
+```go
+func TestExtractOption(t *testing.T) {
+    tests := []struct {
+        name         string
+        options      map[string]any
+        key          string
+        defaultValue float64
+        expected     float64
+    }{
+        {
+            name:         "key exists",
+            options:      map[string]any{"temperature": 0.7},
+            key:          "temperature",
+            defaultValue: 0.5,
+            expected:     0.7,
+        },
+        {
+            name:         "key missing",
+            options:      map[string]any{},
+            key:          "temperature",
+            defaultValue: 0.5,
+            expected:     0.5,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := config.ExtractOption(tt.options, tt.key, tt.defaultValue)
+            if result != tt.expected {
+                t.Errorf("got %v, want %v", result, tt.expected)
+            }
+        })
+    }
+}
+```
+
+### HTTP Mocking for Provider Tests
+**Principle**: Use `httptest.Server` to mock HTTP responses when testing provider integrations.
+
+**Rationale**: HTTP mocking allows testing provider logic without live services or credentials. It provides deterministic, fast, isolated tests that verify HTTP request/response handling without external dependencies.
+
+**Implementation**:
+- Create `httptest.NewServer` with handler function that returns mock responses
+- Pass `server.URL` to provider configuration
+- Verify request formatting and response parsing
+- Use `defer server.Close()` to clean up
+
+**Example**:
+```go
+func TestOllama_Request(t *testing.T) {
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Verify request
+        if r.Method != "POST" {
+            t.Errorf("expected POST, got %s", r.Method)
+        }
+
+        // Send mock response
+        response := protocols.ChatResponse{
+            Choices: []struct{
+                Message protocols.Message
+            }{
+                {Message: protocols.NewMessage("assistant", "Test response")},
+            },
+        }
+        json.NewEncoder(w).Encode(response)
+    }))
+    defer server.Close()
+
+    // Test provider with server.URL
+}
+```
+
+### Coverage Requirements
+**Principle**: Maintain 80% minimum test coverage across all packages, with 100% coverage for critical paths.
+
+**Rationale**: High coverage ensures reliability, catches regressions, and validates edge cases. Critical paths (parsing, validation, routing) require complete coverage as failures in these areas have cascading effects.
+
+**Implementation**:
+- Run coverage analysis: `go test ./tests/config/... -coverprofile=coverage.out -coverpkg=./pkg/config/...`
+- Review coverage: `go tool cover -func=coverage.out`
+- Generate HTML report: `go tool cover -html=coverage.out -o coverage.html`
+- Critical paths require 100% coverage: request/response parsing, config validation, protocol routing, option merging
+
+### Integration Validation Strategy
+**Principle**: No automated integration tests in the test suite. Manual validation via `tools/prompt-agent` CLI.
+
+**Rationale**: Automated integration tests require live LLM services and credential management, creating security risks and CI/CD dependencies. Manual validation provides real-world verification without test suite complexity.
+
+**Implementation**:
+- README examples serve as integration test cases
+- All examples are executable via `tools/prompt-agent`
+- Validation performed before releases and after provider changes
+- No credentials stored in repository
+- No live service dependencies in CI/CD
+
+**When to Validate**:
+- Before releases
+- After provider-specific changes
+- When adding new capability formats
+- To verify configuration changes
+
+### Test Naming Conventions
+**Principle**: Test function names clearly describe what is being tested and the scenario.
+
+**Rationale**: Clear test names serve as documentation and make failures immediately understandable without reading test code.
+
+**Implementation**:
+- Format: `Test<Type>_<Method>_<Scenario>`
+- Use descriptive scenario names in table-driven tests
+- Avoid abbreviations in test names
+
+**Examples**:
+- `TestDuration_UnmarshalJSON_ParsesStringFormat`
+- `TestModelConfig_Merge_SourceEmptyNamePreservesBase`
+- `TestExtractOption_ExistsWithCorrectType`

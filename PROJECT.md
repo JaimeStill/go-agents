@@ -91,16 +91,14 @@ To reach production-ready MVP status, the following tasks remain:
 - [ ] `pkg/agent`: Agent interface and protocol methods
 - [ ] `pkg/config`: Configuration loading, merging, and validation
 
-**Integration Tests** (High Priority)
-- [ ] End-to-end protocol execution with live providers (Ollama, Azure)
-- [ ] Streaming response handling
-- [ ] Error handling and retry logic
-- [ ] Configuration composition and option merging
-- [ ] Provider authentication mechanisms
-
 **Test Coverage Goals**
 - Minimum 80% code coverage across all packages
 - 100% coverage for critical paths (request/response parsing, validation)
+
+**Integration Validation**
+- Manual validation using `tools/prompt-agent` with live providers
+- README examples serve as integration validation
+- See `_context/mvp-completion.md` for validation strategy
 
 #### 2. Code Documentation
 
@@ -219,7 +217,7 @@ Once MVP completion is achieved (testing and documentation complete), the librar
 
 **Publishing Checklist**:
 - [ ] All unit tests passing with 80%+ coverage
-- [ ] All integration tests passing
+- [ ] README examples verified via `tools/prompt-agent`
 - [ ] Complete package documentation (godoc)
 - [ ] README updated with installation and usage instructions
 - [ ] ARCHITECTURE.md reflects current implementation

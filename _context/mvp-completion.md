@@ -12,11 +12,10 @@ The go-agents library core implementation is complete and operational. This guid
 
 ## Implementation Phases
 
-This work is organized into three sequential phases:
+This work is organized into two sequential phases:
 
 1. **Phase 1: Testing Infrastructure** - Unit tests for all packages
-2. **Phase 2: Integration Testing** - End-to-end functionality verification
-3. **Phase 3: Documentation** - Comprehensive godoc and inline documentation
+2. **Phase 2: Documentation** - Comprehensive godoc and inline documentation
 
 ---
 
@@ -383,169 +382,11 @@ go tool cover -html=coverage.out -o coverage.html
 
 ---
 
-## Phase 2: Integration Testing
-
-Integration tests verify end-to-end functionality with live or mocked providers. These tests should be separated from unit tests.
-
-**Test File Location**: Create `integration_test.go` in project root or `tests/` directory
-
-**Build Tag**: Use `//go:build integration` to separate from unit tests
-
-```go
-//go:build integration
-// +build integration
-
-package tests
-```
-
-**Run Integration Tests**:
-```bash
-go test -tags=integration ./...
-```
-
----
-
-### 2.1 Provider Integration Tests
-
-**Test Structure**: Use table-driven tests with provider configurations
-
-**Ollama Provider Tests**:
-- `TestIntegration_Ollama_Chat` - Non-streaming chat completion
-- `TestIntegration_Ollama_ChatStream` - Streaming chat completion
-- `TestIntegration_Ollama_Vision_LocalImage` - Vision with file path
-- `TestIntegration_Ollama_Vision_WebURL` - Vision with web URL
-- `TestIntegration_Ollama_Tools_SingleTool` - Tool calling with one tool
-- `TestIntegration_Ollama_Tools_MultipleCalls` - Tool calling with multiple tools
-- `TestIntegration_Ollama_Embeddings` - Embedding generation
-
-**Azure Provider Tests**:
-- `TestIntegration_Azure_Chat_APIKey` - Chat with API key auth
-- `TestIntegration_Azure_Chat_Bearer` - Chat with Bearer token auth
-- `TestIntegration_Azure_ChatStream` - Streaming chat
-- `TestIntegration_Azure_Reasoning` - Reasoning model (openai-reasoning format)
-- `TestIntegration_Azure_ErrorHandling` - Invalid credentials, rate limits
-
-**Test Infrastructure**:
-```go
-func setupOllamaAgent() (agent.Agent, error) {
-    config := &config.AgentConfig{
-        Name: "test-agent",
-        Transport: &config.TransportConfig{
-            Provider: &config.ProviderConfig{
-                Name: "ollama",
-                BaseURL: "http://localhost:11434",
-                Model: &config.ModelConfig{
-                    Name: "llama3.2:3b",
-                    Capabilities: map[string]config.CapabilityConfig{
-                        "chat": {
-                            Format: "openai-chat",
-                            Options: map[string]any{"max_tokens": 100},
-                        },
-                    },
-                },
-            },
-            Timeout: config.Duration(30 * time.Second),
-        },
-    }
-    return agent.New(config)
-}
-```
-
----
-
-### 2.2 Configuration Composition Tests
-
-- `TestIntegration_MultiProtocolModel` - Model with multiple capabilities
-- `TestIntegration_OptionIsolation` - Protocol-specific options don't conflict
-- `TestIntegration_RuntimeOptionUpdate` - Update options on live agent
-- `TestIntegration_OptionMerging` - Config + request option merge behavior
-- `TestIntegration_ValidationTiming` - Options validated after merge
-
----
-
-### 2.3 Error Handling Tests
-
-- `TestIntegration_InvalidProtocol` - Unsupported protocol request
-- `TestIntegration_UnknownCapabilityFormat` - Invalid format in config
-- `TestIntegration_InvalidOptions` - Capability-specific validation
-- `TestIntegration_NetworkFailure` - Connection timeout, refused connection
-- `TestIntegration_AuthenticationFailure` - Invalid credentials
-- `TestIntegration_StreamInterruption` - Streaming connection drop
-
----
-
-### 2.4 Concurrent Request Tests
-
-- `TestIntegration_ConcurrentChat` - Multiple simultaneous chat requests
-- `TestIntegration_ConcurrentProtocols` - Different protocols simultaneously
-- `TestIntegration_ConnectionPooling` - Connection pool behavior
-- `TestIntegration_HealthTracking` - Health status under load
-- `TestIntegration_RegistryThreadSafety` - Concurrent format/provider registry access
-
-**Test Pattern**:
-```go
-func TestIntegration_ConcurrentChat(t *testing.T) {
-    agent := setupAgent(t)
-
-    var wg sync.WaitGroup
-    errors := make(chan error, 10)
-
-    for i := 0; i < 10; i++ {
-        wg.Add(1)
-        go func(id int) {
-            defer wg.Done()
-            _, err := agent.Chat(context.Background(), fmt.Sprintf("Request %d", id))
-            if err != nil {
-                errors <- err
-            }
-        }(i)
-    }
-
-    wg.Wait()
-    close(errors)
-
-    for err := range errors {
-        t.Errorf("Concurrent request failed: %v", err)
-    }
-}
-```
-
----
-
-### 2.5 Mock Provider Testing
-
-For tests that don't require live providers, create a mock HTTP server:
-
-```go
-func setupMockProvider(t *testing.T) (*httptest.Server, agent.Agent) {
-    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        response := protocols.ChatResponse{
-            Choices: []struct {
-                Index   int
-                Message protocols.Message
-                // ...
-            }{
-                {Message: protocols.NewMessage("assistant", "Mock response")},
-            },
-        }
-        json.NewEncoder(w).Encode(response)
-    }))
-
-    config := createTestConfig(server.URL)
-    agent, err := agent.New(config)
-    require.NoError(t, err)
-
-    return server, agent
-}
-```
-
----
-
-## Phase 3: Documentation
+## Phase 2: Documentation
 
 Documentation should be added **after** testing to ensure accurate descriptions of tested behavior. Follow idiomatic Go conventions.
 
-### 3.1 Package Documentation (High Priority)
+### 2.1 Package Documentation (High Priority)
 
 Add package-level godoc comments to each package. Place at the top of the primary file in each package.
 
@@ -749,7 +590,58 @@ package agent
 
 ---
 
-### 3.2 Exported Type/Function Documentation
+### 2.2 Validation Strategy
+
+While the library includes comprehensive unit tests with mocks, integration validation is performed manually using real provider interactions rather than automated integration tests.
+
+**Validation Approach**:
+
+The `tools/prompt-agent` command-line utility serves as the primary integration validation tool. This approach eliminates credential management complexity, removes dependencies on live services from the test suite, and provides real-world validation of provider integration.
+
+**How Validation Works**:
+
+1. **README Examples as Tests**: All usage examples in README.md are executable via `tools/prompt-agent`
+2. **Manual Testing Workflow**: Developers run README examples against live providers when needed
+3. **Real Integration Verification**: If README examples execute successfully, integration works
+4. **No Automated Integration Tests**: The test suite contains only unit tests with mocks
+
+**Benefits**:
+- ✅ No credential exposure in test files
+- ✅ No live service dependencies in CI/CD
+- ✅ Real provider validation when needed
+- ✅ Executable documentation (examples are actually tested)
+- ✅ Developer-controlled testing (credentials only needed for manual validation)
+
+**Validation Commands**:
+
+```bash
+# Test Ollama integration (requires local Ollama running)
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -prompt "What is Go?" \
+  -stream
+
+# Test Azure integration (requires valid token)
+AZURE_TOKEN=$(. scripts/azure/utilities/get-foundry-token.sh)
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.azure-entra.json \
+  -token $AZURE_TOKEN \
+  -prompt "Describe Kubernetes" \
+  -stream
+
+# Test all protocols (chat, vision, tools, embeddings)
+# See README.md for comprehensive protocol examples
+```
+
+**When to Run Validation**:
+- Before releases
+- After provider-specific changes
+- When adding new capability formats
+- To verify configuration changes
+
+---
+
+### 2.3 Exported Type/Function Documentation
 
 Document all exported types, interfaces, functions, and methods following Go conventions:
 
@@ -874,7 +766,7 @@ type CapabilityOption struct {
 
 ---
 
-### 3.3 Inline Documentation (Medium Priority)
+### 2.4 Inline Documentation (Medium Priority)
 
 Add inline comments for complex logic and non-obvious implementations.
 
@@ -993,7 +885,7 @@ func (c *client) HTTPClient() *http.Client {
 
 ---
 
-### 3.4 Documentation Verification
+### 2.5 Documentation Verification
 
 **Check Documentation Quality**:
 ```bash
@@ -1028,49 +920,39 @@ godoc -http=:6060
 6. pkg/transport/ (2-3 hours)
 7. pkg/agent/ (1-2 hours)
 
-**Phase 2: Integration Testing (Estimated: 6-8 hours)**
-1. Provider integration tests (3-4 hours)
-2. Configuration composition tests (1 hour)
-3. Error handling tests (1-2 hours)
-4. Concurrent request tests (1-2 hours)
-
-**Phase 3: Documentation (Estimated: 8-12 hours)**
+**Phase 2: Documentation (Estimated: 8-12 hours)**
 1. Package documentation (2-3 hours)
-2. Exported type/function documentation (4-6 hours)
-3. Inline documentation (2-3 hours)
+2. Validation strategy documentation (included in package docs)
+3. Exported type/function documentation (4-6 hours)
+4. Inline documentation (2-3 hours)
 
-**Total Estimated Effort**: 30-44 hours
+**Total Estimated Effort**: 24-36 hours
 
 ---
 
 ## Success Criteria
 
 ### Phase 1 Complete
-- [x] All packages have corresponding test files
-- [x] Test coverage reaches 80% minimum
-- [x] Critical paths have 100% coverage
-- [x] All tests pass: `go test ./...`
+- [ ] All packages have corresponding test files
+- [ ] Test coverage reaches 80% minimum
+- [ ] Critical paths have 100% coverage
+- [ ] All tests pass: `go test ./...`
 
 ### Phase 2 Complete
-- [x] Integration tests cover all protocols
-- [x] Integration tests cover all providers
-- [x] Concurrent request tests verify thread-safety
-- [x] Error handling tests cover common failure modes
-- [x] Integration tests pass: `go test -tags=integration ./...`
-
-### Phase 3 Complete
-- [x] All packages have godoc comments
-- [x] All exported types/functions documented
-- [x] Complex logic has inline comments
-- [x] `go doc` produces readable output for all packages
-- [x] Documentation verified at http://localhost:6060
+- [ ] All packages have godoc comments
+- [ ] All exported types/functions documented
+- [ ] Complex logic has inline comments
+- [ ] Validation strategy documented
+- [ ] `go doc` produces readable output for all packages
+- [ ] Documentation verified at http://localhost:6060
 
 ### MVP Complete
-- [x] All three phases completed
-- [x] Documentation reviewed for accuracy
-- [x] Test coverage report generated and reviewed
-- [x] PROJECT.md updated with publishing section
-- [x] Ready for v0.1.0 pre-release tag
+- [ ] Both phases completed
+- [ ] Documentation reviewed for accuracy
+- [ ] Test coverage report generated and reviewed
+- [ ] README examples verified via prompt-agent tool
+- [ ] PROJECT.md updated with publishing section
+- [ ] Ready for v0.1.0 pre-release tag
 
 ---
 

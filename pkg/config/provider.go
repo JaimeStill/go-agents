@@ -1,5 +1,8 @@
 package config
 
+// ProviderConfig defines the configuration for an LLM provider.
+// It includes the provider name, base URL, model configuration, and
+// provider-specific options (e.g., deployment, API version, authentication type).
 type ProviderConfig struct {
 	Name    string         `json:"name"`
 	BaseURL string         `json:"base_url"`
@@ -7,6 +10,7 @@ type ProviderConfig struct {
 	Options map[string]any `json:"options"`
 }
 
+// DefaultProviderConfig creates a ProviderConfig with Ollama defaults.
 func DefaultProviderConfig() *ProviderConfig {
 	return &ProviderConfig{
 		Name:    "ollama",
@@ -16,6 +20,8 @@ func DefaultProviderConfig() *ProviderConfig {
 	}
 }
 
+// Merge combines the source ProviderConfig into this ProviderConfig.
+// Non-empty name, base_url, model, and options from source override the current values.
 func (c *ProviderConfig) Merge(source *ProviderConfig) {
 	if source.Name != "" {
 		c.Name = source.Name

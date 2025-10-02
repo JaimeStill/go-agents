@@ -108,21 +108,29 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
 {
   "name": "ollama-agent",
   "system_prompt": "You are a helpful assistant",
-  "client": {
-    "provider": "ollama",
-    "format": "openai-standard",
-    "endpoint": "http://localhost:11434",
-    "model": "llama3.2:3b",
-    "timeout": 60000000000,
+  "transport": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "llama3.2:3b",
+        "capabilities": {
+          "chat": {
+            "format": "openai-chat",
+            "options": {
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "top_p": 0.95
+            }
+          }
+        }
+      }
+    },
+    "timeout": "60s",
     "max_retries": 3,
-    "retry_backoff_base": 1000000000,
+    "retry_backoff_base": "1s",
     "connection_pool_size": 10,
-    "connection_timeout": 90000000000,
-    "options": {
-      "max_tokens": 4096,
-      "temperature": 0.7,
-      "top_p": 0.95
-    }
+    "connection_timeout": "90s"
   }
 }
 ```
@@ -132,17 +140,33 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
 ```json
 {
   "name": "azure-key-agent",
-  "client": {
-    "provider": "azure",
-    "format": "openai-reasoning",
-    "endpoint": "https://go-agents-platform.openai.azure.com",
-    "model": "o3-mini",
-    "options": {
-      "deployment": "o3-mini",
-      "api_version": "2025-01-01-preview",
-      "auth_type": "api_key",
-      "max_completion_tokens": 4096
-    }
+  "system_prompt": "You are a helpful assistant",
+  "transport": {
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "model": {
+        "name": "o3-mini",
+        "capabilities": {
+          "chat": {
+            "format": "openai-reasoning",
+            "options": {
+              "max_completion_tokens": 4096
+            }
+          }
+        }
+      },
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
   }
 }
 ```
@@ -152,27 +176,45 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
 ```json
 {
   "name": "azure-token-agent",
-  "client": {
-    "provider": "azure",
-    "format": "openai-reasoning",
-    "endpoint": "https://go-agents-platform.openai.azure.com",
-    "model": "o3-mini",
-    "options": {
-      "deployment": "o3-mini",
-      "api_version": "2025-01-01-preview",
-      "auth_type": "bearer",
-      "max_completion_tokens": 4096
-    }
+  "system_prompt": "You are a helpful assistant",
+  "transport": {
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "model": {
+        "name": "o3-mini",
+        "capabilities": {
+          "chat": {
+            "format": "openai-reasoning",
+            "options": {
+              "max_completion_tokens": 4096
+            }
+          }
+        }
+      },
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "bearer"
+      }
+    },
+    "timeout": "24s",
+    "max_retries": 3,
+    "retry_backoff_base": "1s",
+    "connection_pool_size": 10,
+    "connection_timeout": "9s"
   }
 }
 ```
 
 **Notes**:
-- Timeout values are in nanoseconds (Go's time.Duration format)
-- Format-specific parameters are now in the `options` map:
-  - **openai-standard**: Uses `max_tokens`, `temperature`, `top_p`
+- Timeout values use human-readable duration strings ("24s", "1m", "2h")
+- Configuration follows hierarchical transport-based structure with composable capabilities
+- Protocol-specific parameters are in capability `options` map:
+  - **openai-chat**: Uses `max_tokens`, `temperature`, `top_p`
   - **openai-reasoning**: Uses `max_completion_tokens` only (ignores temperature/top_p)
-- Azure requires custom subdomain endpoints for bearer token authentication
+- Provider-level options (like `deployment`, `api_version`, `auth_type`) are in provider `options`
+- Azure requires `/openai` path suffix in base_url
 - The `auth_type` option supports `"api_key"` or `"bearer"` for Azure provider
 - Authentication credentials are provided via the `-token` command line flag
 
