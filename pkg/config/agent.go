@@ -6,12 +6,15 @@ import (
 	"os"
 )
 
+// AgentConfig defines the complete configuration for an agent.
+// It includes the agent name, optional system prompt, and transport configuration.
 type AgentConfig struct {
 	Name         string           `json:"name"`
 	SystemPrompt string           `json:"system_prompt,omitempty"`
 	Transport    *TransportConfig `json:"transport,omitempty"`
 }
 
+// DefaultAgentConfig creates an AgentConfig with default values.
 func DefaultAgentConfig() AgentConfig {
 	transport := DefaultTransportConfig()
 	return AgentConfig{
@@ -21,6 +24,8 @@ func DefaultAgentConfig() AgentConfig {
 	}
 }
 
+// Merge combines the source AgentConfig into this AgentConfig.
+// Non-empty name, system_prompt, and transport from source override the current values.
 func (c *AgentConfig) Merge(source *AgentConfig) {
 	if source.Name != "" {
 		c.Name = source.Name
@@ -39,6 +44,8 @@ func (c *AgentConfig) Merge(source *AgentConfig) {
 	}
 }
 
+// LoadAgentConfig loads an AgentConfig from a JSON file and merges it with defaults.
+// Returns an error if the file cannot be read or the JSON is invalid.
 func LoadAgentConfig(filename string) (*AgentConfig, error) {
 	config := DefaultAgentConfig()
 

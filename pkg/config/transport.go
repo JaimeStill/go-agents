@@ -2,6 +2,9 @@ package config
 
 import "time"
 
+// TransportConfig defines the configuration for the transport layer.
+// It includes provider configuration, timeout settings, retry behavior,
+// and connection pooling parameters.
 type TransportConfig struct {
 	Provider           *ProviderConfig `json:"provider"`
 	Timeout            Duration        `json:"timeout"`
@@ -11,6 +14,7 @@ type TransportConfig struct {
 	ConnectionTimeout  Duration        `json:"connection_timeout"`
 }
 
+// DefaultTransportConfig creates a TransportConfig with default values.
 func DefaultTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		Provider:           DefaultProviderConfig(),
@@ -22,6 +26,8 @@ func DefaultTransportConfig() *TransportConfig {
 	}
 }
 
+// Merge combines the source TransportConfig into this TransportConfig.
+// Positive values from source override the current values. Zero values are ignored.
 func (c *TransportConfig) Merge(source *TransportConfig) {
 	if source.Timeout > 0 {
 		c.Timeout = source.Timeout
