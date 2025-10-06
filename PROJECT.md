@@ -80,26 +80,7 @@ The following capability formats are registered and functional:
 
 To reach production-ready MVP status, the following tasks remain:
 
-#### 1. Observability Infrastructure (Prerequisite)
-
-Before implementing comprehensive testing and documentation, foundational observability capabilities must be added to enable execution tracing, decision logging, and confidence scoring in examples and production use.
-
-**Requirements**:
-- [ ] Observer interface for protocol execution hooks
-- [ ] Request/response metadata capture (request IDs, timing, token usage)
-- [ ] Error context enrichment with execution details
-- [ ] Optional and composable design (agents function without observers)
-- [ ] Foundation for examples-based observability layers
-
-**Design Approach**:
-- Observer interface in `pkg/agent/` for protocol lifecycle hooks
-- Extension points in lower-level packages as needed
-- Minimal performance overhead
-- Detailed design to be planned in separate session
-
-**Status**: To be designed and implemented before testing/documentation phases begin.
-
-#### 2. Testing Infrastructure
+#### 1. Testing Infrastructure
 
 **Unit Tests** (High Priority)
 - [ ] `pkg/protocols`: Message, Request, Response structures and helpers
@@ -119,7 +100,7 @@ Before implementing comprehensive testing and documentation, foundational observ
 - README examples serve as integration validation
 - See `_context/mvp-completion.md` for validation strategy
 
-#### 3. Code Documentation
+#### 2. Code Documentation
 
 **Package Documentation** (High Priority)
 - [ ] Add package-level godoc comments to all `pkg/*` packages
@@ -137,6 +118,21 @@ Before implementing comprehensive testing and documentation, foundational observ
 - Use complete sentences starting with the declared name
 - Include code examples for non-trivial usage patterns
 - Document exported functions, types, and constants
+
+### Removed from Scope
+
+**Observability Infrastructure**: Initially planned as a prerequisite for MVP completion, observability metadata infrastructure was implemented and then determined to be out of scope after thorough evaluation. The implementation added significant complexity (request ID tracking, timing metadata, retry reason capture, raw HTTP data preservation) that duplicated information already available in protocol responses or belonged at the infrastructure layer rather than in a primitive agent interface library.
+
+**Key Findings**:
+- Protocol responses already contain essential observability data (token usage via `Usage` field, response IDs, model information)
+- HTTP-level observability (request timing, retry tracking, correlation IDs) is an infrastructure concern better handled by:
+  - Middleware/wrapper layers that library consumers can add based on their needs
+  - The future `go-agents-orchestration` package's observability layer (planned in Examples Roadmap Phase 2-3)
+  - Application-level logging and monitoring solutions
+- Adding metadata infrastructure to the core library violated the "minimal abstractions" design principle
+- The complexity-to-value ratio did not justify inclusion in a primitive interface library
+
+**Decision**: Focus the library on its core mission of providing clean, composable primitives for LLM interactions. Observability capabilities will be addressed in higher-level packages where they naturally belong as part of workflow orchestration and decision tracking.
 
 ## Examples Roadmap
 

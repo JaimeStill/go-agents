@@ -440,8 +440,8 @@ go run tools/prompt-agent/main.go \
 
 ### Phase 1: Unit Testing
 
-- [ ] pkg/config/ (Session 1)
-- [ ] pkg/protocols/ (Session 2)
+- [x] pkg/config/ (Session 1)
+- [x] pkg/protocols/ (Session 2)
 - [ ] pkg/capabilities/ (Session 3)
 - [ ] pkg/models/ (Session 4)
 - [ ] pkg/providers/ (Session 5)
@@ -450,8 +450,8 @@ go run tools/prompt-agent/main.go \
 
 ### Phase 2: Documentation
 
-- [ ] pkg/config/ (Session 1)
-- [ ] pkg/protocols/ (Session 2)
+- [x] pkg/config/ (Session 1)
+- [x] pkg/protocols/ (Session 2)
 - [ ] pkg/capabilities/ (Session 3)
 - [ ] pkg/models/ (Session 4)
 - [ ] pkg/providers/ (Session 5)
