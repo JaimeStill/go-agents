@@ -8,13 +8,32 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
+// Model provides a protocol-agnostic interface for working with LLM models.
+// Each model supports one or more protocols (chat, vision, tools, embeddings)
+// and manages protocol-specific capabilities and options.
 type Model interface {
+	// Name returns the model's identifier.
 	Name() string
 
+	// SupportsProtocol checks if the model supports a given protocol.
 	SupportsProtocol(p protocols.Protocol) bool
+
+	// GetCapability returns the capability instance for a protocol.
+	// Returns an error if the protocol is not supported.
 	GetCapability(p protocols.Protocol) (capabilities.Capability, error)
+
+	// GetProtocolOptions returns the model's default options for a protocol.
+	// Returns an empty map if the protocol is not supported.
 	GetProtocolOptions(p protocols.Protocol) map[string]any
+
+	// UpdateProtocolOptions updates the model's default options for a protocol.
+	// Validates options against the capability's requirements.
+	// Returns an error if the protocol is not supported or options are invalid.
 	UpdateProtocolOptions(p protocols.Protocol, options map[string]any) error
+
+	// MergeRequestOptions merges model options with request options for a protocol.
+	// Request options take precedence over model defaults.
+	// Returns the request options unchanged if the protocol is not supported.
 	MergeRequestOptions(p protocols.Protocol, options map[string]any) map[string]any
 }
 
@@ -27,6 +46,9 @@ type model struct {
 	embeddings *ProtocolHandler
 }
 
+// New creates a Model from configuration.
+// Validates that all protocols are valid and capability formats exist.
+// Returns an error if configuration is invalid or capabilities cannot be loaded.
 func New(cfg *config.ModelConfig) (Model, error) {
 	m := &model{
 		name: cfg.Name,

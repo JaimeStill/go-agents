@@ -14,6 +14,8 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
+// AzureProvider implements Provider for Azure OpenAI Service.
+// Supports deployment-based routing and both API key and Entra ID authentication.
 type AzureProvider struct {
 	*BaseProvider
 	deployment string
@@ -22,6 +24,9 @@ type AzureProvider struct {
 	apiVersion string
 }
 
+// NewAzure creates a new AzureProvider from configuration.
+// Requires "deployment", "auth_type", "token", and "api_version" in options.
+// Returns an error if any required option is missing or model creation fails.
 func NewAzure(c *config.ProviderConfig) (Provider, error) {
 	deployment, ok := c.Options["deployment"].(string)
 	if !ok || deployment == "" {
@@ -57,6 +62,11 @@ func NewAzure(c *config.ProviderConfig) (Provider, error) {
 	}, nil
 }
 
+// GetEndpoint returns the full Azure OpenAI endpoint URL for a protocol.
+// Includes deployment name in path and api-version as query parameter.
+// Supports chat, vision, tools (all use /deployments/{deployment}/chat/completions),
+// and embeddings (/deployments/{deployment}/embeddings).
+// Returns an error if the protocol is not supported.
 func (p *AzureProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
 	basePath := fmt.Sprintf("/deployments/%s", p.deployment)
 
@@ -75,6 +85,9 @@ func (p *AzureProvider) GetEndpoint(protocol protocols.Protocol) (string, error)
 	return fmt.Sprintf("%s%s?api-version=%s", p.BaseURL(), endpoint, p.apiVersion), nil
 }
 
+// PrepareRequest prepares a standard (non-streaming) Azure request.
+// Marshals the protocol request body and includes protocol headers.
+// Returns an error if the endpoint is invalid or marshaling fails.
 func (p *AzureProvider) PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error) {
 	endpoint, err := p.GetEndpoint(protocol)
 	if err != nil {
@@ -93,6 +106,9 @@ func (p *AzureProvider) PrepareRequest(ctx context.Context, protocol protocols.P
 	}, nil
 }
 
+// PrepareStreamRequest prepares a streaming Azure request.
+// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
+// Returns an error if the endpoint is invalid or marshaling fails.
 func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error) {
 	endpoint, err := p.GetEndpoint(protocol)
 	if err != nil {
@@ -115,6 +131,9 @@ func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, protocol proto
 	}, nil
 }
 
+// ProcessResponse processes a standard Azure HTTP response.
+// Returns an error if the HTTP status is not OK.
+// Delegates response parsing to the capability's ParseResponse method.
 func (p *AzureProvider) ProcessResponse(resp *http.Response, capability capabilities.Capability) (any, error) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -129,6 +148,11 @@ func (p *AzureProvider) ProcessResponse(resp *http.Response, capability capabili
 	return capability.ParseResponse(body)
 }
 
+// ProcessStreamResponse processes a streaming Azure HTTP response with SSE format.
+// Azure uses "data: " prefix for server-sent events.
+// Returns a channel that emits parsed streaming chunks.
+// The channel is closed when the stream completes or context is cancelled.
+// Returns an error if the HTTP status is not OK.
 func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, capability capabilities.StreamingCapability) (<-chan any, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
@@ -188,6 +212,8 @@ func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Re
 	return output, nil
 }
 
+// SetHeaders sets authentication headers on the HTTP request.
+// Supports "api_key" (api-key header) and "bearer" (Authorization: Bearer <token>).
 func (p *AzureProvider) SetHeaders(req *http.Request) {
 	switch p.authType {
 	case "api_key":
