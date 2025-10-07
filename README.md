@@ -758,3 +758,87 @@ For Azure AI Foundry with reasoning models:
   }
 }
 ```
+
+## Development
+
+### Running Tests
+
+The library includes comprehensive unit tests organized in the `tests/` directory. All tests use black-box testing with the `package_test` suffix.
+
+**Run all tests:**
+```bash
+go test ./tests/... -v
+```
+
+**Run tests for a specific package:**
+```bash
+go test ./tests/config/... -v
+go test ./tests/protocols/... -v
+go test ./tests/capabilities/... -v
+go test ./tests/models/... -v
+go test ./tests/providers/... -v
+go test ./tests/transport/... -v
+go test ./tests/agent/... -v
+```
+
+**Generate coverage report:**
+```bash
+# Generate coverage for all packages
+go test ./tests/... -coverprofile=coverage.out -coverpkg=./pkg/...
+
+# View coverage summary
+go tool cover -func=coverage.out
+
+# Generate HTML coverage report
+go tool cover -html=coverage.out -o coverage.html
+```
+
+**Current Coverage**: 89.3% overall (exceeds 80% minimum requirement)
+
+### Viewing Documentation
+
+All packages include comprehensive godoc documentation.
+
+**View package documentation:**
+```bash
+# View main package overview
+go doc github.com/JaimeStill/go-agents/pkg/agent
+
+# View specific type documentation
+go doc github.com/JaimeStill/go-agents/pkg/agent.Agent
+go doc github.com/JaimeStill/go-agents/pkg/protocols.Protocol
+go doc github.com/JaimeStill/go-agents/pkg/capabilities.Capability
+```
+
+**View all available packages:**
+```bash
+go doc github.com/JaimeStill/go-agents/pkg/config
+go doc github.com/JaimeStill/go-agents/pkg/protocols
+go doc github.com/JaimeStill/go-agents/pkg/capabilities
+go doc github.com/JaimeStill/go-agents/pkg/models
+go doc github.com/JaimeStill/go-agents/pkg/providers
+go doc github.com/JaimeStill/go-agents/pkg/transport
+go doc github.com/JaimeStill/go-agents/pkg/agent
+```
+
+**Start local documentation server:**
+```bash
+# Install godoc if not already installed
+go install golang.org/x/tools/cmd/godoc@latest
+
+# Start documentation server
+godoc -http=:6060
+
+# Visit: http://localhost:6060/pkg/github.com/JaimeStill/go-agents/
+```
+
+### Testing Strategy
+
+For detailed information on the testing approach, patterns, and coverage requirements, see the **Testing Strategy** section in [ARCHITECTURE.md](./ARCHITECTURE.md#testing-strategy).
+
+**Key Points**:
+- Tests organized in separate `tests/` directory
+- Black-box testing using `package_test` suffix
+- Table-driven test patterns
+- HTTP mocking with `httptest.Server`
+- 80% minimum coverage requirement (89.3% achieved)

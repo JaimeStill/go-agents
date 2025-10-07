@@ -14,11 +14,17 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
+// OllamaProvider implements Provider for Ollama services with OpenAI-compatible API.
+// Supports local and remote Ollama instances with optional authentication.
 type OllamaProvider struct {
 	*BaseProvider
 	options map[string]any
 }
 
+// NewOllama creates a new OllamaProvider from configuration.
+// Automatically adds /v1 suffix to base URL if not present for OpenAI compatibility.
+// Supports optional authentication via "auth_type" and "token" options.
+// Returns an error if model creation fails.
 func NewOllama(c *config.ProviderConfig) (Provider, error) {
 	baseURL := c.BaseURL
 	if !strings.HasSuffix(baseURL, "/v1") {
@@ -36,6 +42,9 @@ func NewOllama(c *config.ProviderConfig) (Provider, error) {
 	}, nil
 }
 
+// GetEndpoint returns the full Ollama endpoint URL for a protocol.
+// Supports chat, vision, tools (all use /chat/completions), and embeddings (/embeddings).
+// Returns an error if the protocol is not supported.
 func (p *OllamaProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
 	endpoints := map[protocols.Protocol]string{
 		protocols.Chat:       "/chat/completions",
@@ -52,6 +61,9 @@ func (p *OllamaProvider) GetEndpoint(protocol protocols.Protocol) (string, error
 	return fmt.Sprintf("%s%s", p.BaseURL(), endpoint), nil
 }
 
+// PrepareRequest prepares a standard (non-streaming) Ollama request.
+// Marshals the protocol request body and includes protocol headers.
+// Returns an error if the endpoint is invalid or marshaling fails.
 func (p *OllamaProvider) PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error) {
 	endpoint, err := p.GetEndpoint(protocol)
 	if err != nil {
@@ -70,6 +82,9 @@ func (p *OllamaProvider) PrepareRequest(ctx context.Context, protocol protocols.
 	}, nil
 }
 
+// PrepareStreamRequest prepares a streaming Ollama request.
+// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
+// Returns an error if the endpoint is invalid or marshaling fails.
 func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error) {
 	endpoint, err := p.GetEndpoint(protocol)
 	if err != nil {
@@ -92,6 +107,9 @@ func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, protocol prot
 	}, nil
 }
 
+// ProcessResponse processes a standard Ollama HTTP response.
+// Returns an error if the HTTP status is not OK.
+// Delegates response parsing to the capability's ParseResponse method.
 func (p *OllamaProvider) ProcessResponse(resp *http.Response, capability capabilities.Capability) (any, error) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -106,6 +124,10 @@ func (p *OllamaProvider) ProcessResponse(resp *http.Response, capability capabil
 	return capability.ParseResponse(body)
 }
 
+// ProcessStreamResponse processes a streaming Ollama HTTP response.
+// Returns a channel that emits parsed streaming chunks.
+// The channel is closed when the stream completes or context is cancelled.
+// Returns an error if the HTTP status is not OK.
 func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, capability capabilities.StreamingCapability) (<-chan any, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
@@ -159,6 +181,9 @@ func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.R
 	return output, nil
 }
 
+// SetHeaders sets authentication headers on the HTTP request.
+// Supports "bearer" token (Authorization: Bearer <token>) and "api_key" (custom header).
+// The "auth_header" option allows customizing the API key header name (default: X-API-Key).
 func (p *OllamaProvider) SetHeaders(req *http.Request) {
 	if authType, ok := p.options["auth_type"].(string); ok {
 		if token, ok := p.options["token"].(string); ok && token != "" {

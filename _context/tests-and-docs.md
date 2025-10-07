@@ -440,23 +440,23 @@ go run tools/prompt-agent/main.go \
 
 ### Phase 1: Unit Testing
 
-- [ ] pkg/config/ (Session 1)
-- [ ] pkg/protocols/ (Session 2)
-- [ ] pkg/capabilities/ (Session 3)
-- [ ] pkg/models/ (Session 4)
-- [ ] pkg/providers/ (Session 5)
-- [ ] pkg/transport/ (Session 6)
-- [ ] pkg/agent/ (Session 7)
+- [x] pkg/config/ (Session 1)
+- [x] pkg/protocols/ (Session 2)
+- [x] pkg/capabilities/ (Session 3)
+- [x] pkg/models/ (Session 4)
+- [x] pkg/providers/ (Session 5)
+- [x] pkg/transport/ (Session 6)
+- [x] pkg/agent/ (Session 7)
 
 ### Phase 2: Documentation
 
-- [ ] pkg/config/ (Session 1)
-- [ ] pkg/protocols/ (Session 2)
-- [ ] pkg/capabilities/ (Session 3)
-- [ ] pkg/models/ (Session 4)
-- [ ] pkg/providers/ (Session 5)
-- [ ] pkg/transport/ (Session 6)
-- [ ] pkg/agent/ (Session 7)
+- [x] pkg/config/ (Session 1)
+- [x] pkg/protocols/ (Session 2)
+- [x] pkg/capabilities/ (Session 3)
+- [x] pkg/models/ (Session 4)
+- [x] pkg/providers/ (Session 5)
+- [x] pkg/transport/ (Session 6)
+- [x] pkg/agent/ (Session 7)
 
 ### Validation
 

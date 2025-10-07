@@ -14,22 +14,47 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/transport"
 )
 
+// Agent provides a high-level interface for LLM interactions.
+// Methods are protocol-specific and handle message initialization,
+// system prompt injection, and response type assertions.
 type Agent interface {
+	// Client returns the underlying transport client.
 	Client() transport.Client
+
+	// Provider returns the provider instance from the client.
 	Provider() providers.Provider
+
+	// Model returns the model instance from the client.
 	Model() models.Model
 
+	// Chat executes a chat protocol request with optional system prompt injection.
+	// Returns the parsed chat response or an error.
 	Chat(ctx context.Context, prompt string, opts ...map[string]any) (*protocols.ChatResponse, error)
+
+	// ChatStream executes a streaming chat protocol request.
+	// Automatically sets stream: true in options.
+	// Returns a channel of streaming chunks or an error.
 	ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
 
+	// Vision executes a vision protocol request with images.
+	// Images can be URLs or base64-encoded data URIs.
+	// Returns the parsed chat response or an error.
 	Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error)
+
+	// VisionStream executes a streaming vision protocol request with images.
+	// Returns a channel of streaming chunks or an error.
 	VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
 
+	// Tools executes a tools protocol request with function definitions.
+	// Returns the parsed tools response with tool calls or an error.
 	Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error)
 
+	// Embed executes an embeddings protocol request.
+	// Returns the parsed embeddings response or an error.
 	Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error)
 }
 
+// agent implements the Agent interface with transport client orchestration.
 type agent struct {
 	client       transport.Client
 	systemPrompt string
@@ -37,6 +62,9 @@ type agent struct {
 	timeout      time.Duration
 }
 
+// New creates a new Agent from configuration.
+// Creates the transport client and initializes system prompt.
+// Returns an error if transport client creation fails.
 func New(config *config.AgentConfig) (Agent, error) {
 	client, err := transport.New(config.Transport)
 	if err != nil {
@@ -49,18 +77,25 @@ func New(config *config.AgentConfig) (Agent, error) {
 	}, nil
 }
 
+// Client returns the underlying transport client.
 func (a *agent) Client() transport.Client {
 	return a.client
 }
 
+// Provider returns the provider instance from the client.
 func (a *agent) Provider() providers.Provider {
 	return a.client.Provider()
 }
 
+// Model returns the model instance from the client.
 func (a *agent) Model() models.Model {
 	return a.client.Model()
 }
 
+// Chat executes a chat protocol request.
+// Initializes messages with system prompt (if configured) and user prompt.
+// Merges provided options with model defaults.
+// Returns parsed ChatResponse or error.
 func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*protocols.ChatResponse, error) {
 	messages := a.initMessages(prompt)
 
@@ -88,6 +123,9 @@ func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any)
 	return response, nil
 }
 
+// ChatStream executes a streaming chat protocol request.
+// Automatically sets stream: true in options.
+// Returns a channel of StreamingChunk or error.
 func (a *agent) ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
@@ -107,6 +145,10 @@ func (a *agent) ChatStream(ctx context.Context, prompt string, opts ...map[strin
 	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
+// Vision executes a vision protocol request with images.
+// Images can be URLs or base64-encoded data URIs.
+// Converts images to []any format for capability processing.
+// Returns parsed ChatResponse or error.
 func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error) {
 	messages := a.initMessages(prompt)
 
@@ -143,6 +185,9 @@ func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts
 	return response, nil
 }
 
+// VisionStream executes a streaming vision protocol request with images.
+// Automatically sets stream: true in options.
+// Returns a channel of StreamingChunk or error.
 func (a *agent) VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
@@ -171,6 +216,9 @@ func (a *agent) VisionStream(ctx context.Context, prompt string, images []string
 	return a.client.ExecuteProtocolStream(ctx, req)
 }
 
+// Tools executes a tools protocol request with function definitions.
+// Converts Tool structs to FunctionDefinition format.
+// Returns parsed ToolsResponse with tool calls or error.
 func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error) {
 	messages := a.initMessages(prompt)
 
@@ -201,6 +249,9 @@ func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...
 	return response, nil
 }
 
+// Embed executes an embeddings protocol request.
+// Sets input text in options and sends empty message list.
+// Returns parsed EmbeddingsResponse or error.
 func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error) {
 	options := map[string]any{
 		"input": input,
@@ -229,6 +280,8 @@ func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any)
 	return response, nil
 }
 
+// setToolDefinitions converts Tool structs to FunctionDefinition format.
+// Each tool is wrapped in a function definition with type "function".
 func setToolDefinitions(tools []Tool) []capabilities.FunctionDefinition {
 	defs := make([]capabilities.FunctionDefinition, len(tools))
 	for i, tool := range tools {
@@ -245,6 +298,9 @@ func setToolDefinitions(tools []Tool) []capabilities.FunctionDefinition {
 	return defs
 }
 
+// initMessages creates the initial message list with optional system prompt.
+// If system prompt is configured, it's added as the first message.
+// User prompt is always added after system prompt.
 func (a *agent) initMessages(prompt string) []protocols.Message {
 	messages := make([]protocols.Message, 0)
 
@@ -257,8 +313,17 @@ func (a *agent) initMessages(prompt string) []protocols.Message {
 	return messages
 }
 
+// Tool defines a function that can be called by the LLM.
+// Used with the Tools protocol for function calling capabilities.
 type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
+	// Name is the function name that the LLM will call.
+	Name string `json:"name"`
+
+	// Description explains what the function does.
+	// Should be clear and detailed to help the LLM decide when to use it.
+	Description string `json:"description"`
+
+	// Parameters is a JSON Schema defining the function's parameters.
+	// Uses the format: {"type": "object", "properties": {...}, "required": [...]}
+	Parameters map[string]any `json:"parameters"`
 }

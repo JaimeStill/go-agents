@@ -6,11 +6,16 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
+// ChatCapability implements the chat protocol with streaming support.
+// Supports standard text-based conversations with configurable options
+// like temperature, max_tokens, and other model parameters.
 type ChatCapability struct {
 	*StandardStreamingCapability
 	capabilityType string
 }
 
+// NewChatCapability creates a new ChatCapability with the specified options.
+// Common options include temperature, max_tokens, top_p, and frequency_penalty.
 func NewChatCapability(name string, options []CapabilityOption) *ChatCapability {
 	return &ChatCapability{
 		StandardStreamingCapability: NewStandardStreamingCapability(
@@ -21,6 +26,8 @@ func NewChatCapability(name string, options []CapabilityOption) *ChatCapability 
 	}
 }
 
+// CreateRequest creates a protocol request for non-streaming chat.
+// Processes options, validates them, and adds the model parameter.
 func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
@@ -35,6 +42,8 @@ func (c *ChatCapability) CreateRequest(req *CapabilityRequest, model string) (*p
 	}, nil
 }
 
+// CreateStreamingRequest creates a protocol request for streaming chat.
+// Sets the stream option to true and processes other options.
 func (c *ChatCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
@@ -50,6 +59,8 @@ func (c *ChatCapability) CreateStreamingRequest(req *CapabilityRequest, model st
 	}, nil
 }
 
+// ParseResponse parses a non-streaming chat response.
+// Returns a ChatResponse containing the model's reply and metadata.
 func (c *ChatCapability) ParseResponse(data []byte) (any, error) {
 	var response protocols.ChatResponse
 	if err := json.Unmarshal(data, &response); err != nil {

@@ -7,10 +7,15 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
+// VisionCapability implements the vision protocol with streaming support.
+// Handles multimodal inputs combining text prompts with images.
+// Transforms image URLs into the structured content format required by vision models.
 type VisionCapability struct {
 	*StandardStreamingCapability
 }
 
+// NewVisionCapability creates a new VisionCapability with the specified options.
+// Required options typically include "images". Optional options include "detail" for image quality.
 func NewVisionCapability(name string, options []CapabilityOption) *VisionCapability {
 	return &VisionCapability{
 		StandardStreamingCapability: NewStandardStreamingCapability(
@@ -21,6 +26,8 @@ func NewVisionCapability(name string, options []CapabilityOption) *VisionCapabil
 	}
 }
 
+// CreateRequest creates a protocol request for non-streaming vision.
+// Processes images and transforms the last user message to include structured image content.
 func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
@@ -40,6 +47,8 @@ func (c *VisionCapability) CreateRequest(req *CapabilityRequest, model string) (
 	}, nil
 }
 
+// CreateStreamingRequest creates a protocol request for streaming vision.
+// Processes images and sets the stream option to true.
 func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error) {
 	options, err := c.ProcessOptions(req.Options)
 	if err != nil {
@@ -60,6 +69,10 @@ func (c *VisionCapability) CreateStreamingRequest(req *CapabilityRequest, model 
 	}, nil
 }
 
+// ProcessImages transforms the last user message to include image content.
+// Takes image URLs from options and creates structured content with text and images.
+// The detail option controls image quality (low, high, auto).
+// Removes images and detail from options after embedding them in message content.
 func (c *VisionCapability) ProcessImages(messages []protocols.Message, options map[string]any) ([]protocols.Message, error) {
 	images, ok := options["images"].([]any)
 	if !ok || len(images) == 0 {
@@ -107,6 +120,8 @@ func (c *VisionCapability) ProcessImages(messages []protocols.Message, options m
 	return messages, nil
 }
 
+// ParseResponse parses a non-streaming vision response.
+// Returns a ChatResponse with the model's analysis of the images.
 func (c *VisionCapability) ParseResponse(data []byte) (any, error) {
 	var response protocols.ChatResponse
 	if err := json.Unmarshal(data, &response); err != nil {
