@@ -190,11 +190,22 @@ The pre-release phase continues until:
 ### Go Module Publishing
 
 **Publishing Process**:
-```bash
+```sh
 # Tag the release
 git tag v0.1.0
 git push origin v0.1.0
+```
 
+GitHub Release:
+- Navigate to https://github.com/JaimeStill/go-agents/releases/new
+- Select tag: v0.1.0
+- Title: "v0.1.0 - Initial Pre-Release"
+- Copy content from CHANGELOG.md into release notes
+- Check "Set as a pre-release"
+- Click "Publish release"
+
+Verify publication:
+```sh
 # Go modules automatically index tagged versions
 # Consumers install with:
 go get github.com/JaimeStill/go-agents@v0.1.0
