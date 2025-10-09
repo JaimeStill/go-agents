@@ -121,369 +121,432 @@ The MVP is **complete** and production-ready. All core functionality, testing in
 - ✅ All packages validated with `go doc` commands
 - ✅ Documentation is clear, comprehensive, and accurate
 
-### Next Phase: Examples Roadmap
+### Next Phase: Pre-Release Publishing and Supplemental Package Development
 
-With MVP completion achieved, the project is ready to begin the **Examples Roadmap** (see Examples Roadmap section below). The examples will drive development of three supplemental packages through production use cases:
-- `go-agents-document-context`: Document processing and text extraction
+With MVP completion achieved, the project is ready for initial publication and supplemental package development. The go-agents library will be published as a pre-release (v0.1.0), enabling development of three independent supplemental packages:
 - `go-agents-orchestration`: Agent coordination and workflow management
+- `go-agents-document-context`: Document processing and text extraction
 - `go-agents-services`: HTTP service primitives for agent-backed APIs
 
-### Removed from Scope
+## Publishing and Versioning
 
-**Observability Infrastructure**: Initially planned as a prerequisite for MVP completion, observability metadata infrastructure was implemented and then determined to be out of scope after thorough evaluation. The implementation added significant complexity (request ID tracking, timing metadata, retry reason capture, raw HTTP data preservation) that duplicated information already available in protocol responses or belonged at the infrastructure layer rather than in a primitive agent interface library.
+### Version Numbering Strategy
 
-**Key Findings**:
-- Protocol responses already contain essential observability data (token usage via `Usage` field, response IDs, model information)
-- HTTP-level observability (request timing, retry tracking, correlation IDs) is an infrastructure concern better handled by:
-  - Middleware/wrapper layers that library consumers can add based on their needs
-  - The future `go-agents-orchestration` package's observability layer (planned in Examples Roadmap Phase 2-3)
-  - Application-level logging and monitoring solutions
-- Adding metadata infrastructure to the core library violated the "minimal abstractions" design principle
-- The complexity-to-value ratio did not justify inclusion in a primitive interface library
+The go-agents library follows [Semantic Versioning 2.0.0](https://semver.org/) with a deliberate pre-release phase to validate API design through real-world usage before committing to long-term stability.
 
-**Decision**: Focus the library on its core mission of providing clean, composable primitives for LLM interactions. Observability capabilities will be addressed in higher-level packages where they naturally belong as part of workflow orchestration and decision tracking.
+**Pre-Release Versions (v0.x.x)**:
+- Initial release: `v0.1.0`
+- Minor version increments for feature additions and improvements
+- Breaking changes allowed between minor versions during pre-release phase
+- Version format: `v0.MINOR.PATCH`
 
-## Examples Roadmap
+**Release Candidates (v1.0.0-rc.x)**:
+- Signal approaching API stability
+- Final opportunity for breaking changes before v1.0.0
+- Thorough validation and community feedback
+- Version format: `v1.0.0-rc.1`, `v1.0.0-rc.2`, etc.
 
-The examples roadmap establishes production-ready supplemental libraries through examples-driven development. The document classification service serves as the first production use case, driving the creation of three core supplemental packages that extend the go-agents primitive library.
+**Stable Release (v1.0.0+)**:
+- API stability commitment: no breaking changes within major version
+- Breaking changes require major version increment (v1.x.x → v2.0.0)
+- Backward compatibility guaranteed within major version
+- Predictable upgrade path for library consumers
+
+### Pre-Release Philosophy and Approach
+
+**Purpose of Pre-Release Phase**:
+- Validate API design through supplemental package development
+- Gather feedback from real-world usage before stabilization
+- Identify missing capabilities and awkward patterns
+- Refine interfaces based on integration experience
+- Build confidence in architectural decisions
+
+**Development Through Usage**:
+The pre-release phase enables validation through building supplemental packages (`go-agents-orchestration`, `go-agents-document-context`, `go-agents-services`) that depend on the published go-agents library. This approach:
+- Exercises the public API from a consumer perspective
+- Reveals integration friction and missing abstractions
+- Validates that the library delivers on its primitive interface promise
+- Demonstrates the componentized platform vision through real packages
+- Builds practical experience with Go package lifecycle management
+
+**Breaking Change Policy (v0.x.x)**:
+During the pre-release phase, breaking changes are acceptable but managed carefully:
+- Breaking changes documented in CHANGELOG.md with upgrade guidance
+- Migration examples provided for significant API changes
+- Breaking changes batched when possible to minimize disruption
+- Clear communication about stability expectations
+- Community feedback actively sought before major restructuring
+
+**Duration and Criteria**:
+The pre-release phase continues until:
+- Supplemental packages validate all core abstractions
+- No major architectural concerns identified during usage
+- API surface feels natural and complete for primitive interface library
+- Documentation comprehensively covers all capabilities
+- Test coverage remains above 80% across all changes
+- Community feedback incorporated and addressed
+- Minimum 2-3 months of real-world usage and iteration
+
+### Go Module Publishing
+
+**Publishing Process**:
+```bash
+# Tag the release
+git tag v0.1.0
+git push origin v0.1.0
+
+# Go modules automatically index tagged versions
+# Consumers install with:
+go get github.com/JaimeStill/go-agents@v0.1.0
+```
+
+**Version Discovery**:
+- Go module proxy indexes all tagged versions
+- Users can browse versions: `go list -m -versions github.com/JaimeStill/go-agents`
+- Specific version installation: `go get github.com/JaimeStill/go-agents@v0.2.0`
+- Latest pre-release: `go get github.com/JaimeStill/go-agents@latest`
+
+**Module Maintenance**:
+- Each version immutable once published
+- Breaking changes require new version
+- CHANGELOG.md maintained with detailed version history
+- GitHub releases created for each version with release notes
+- Migration guides provided for breaking changes
+
+### Publishing Checklist
+
+Before publishing any version, ensure:
+
+**Code Quality**:
+- [ ] All unit tests passing with 80%+ coverage
+- [ ] No critical bugs or known issues
+- [ ] Code review completed for all changes since last version
+- [ ] Go vet and staticcheck clean
+- [ ] All deprecated features documented with migration path
+
+**Documentation**:
+- [ ] README updated with current capabilities and examples
+- [ ] README examples verified via `tools/prompt-agent`
+- [ ] Complete package documentation (godoc)
+- [ ] ARCHITECTURE.md reflects current implementation
+- [ ] CHANGELOG.md updated with version changes
+- [ ] Migration guide provided for breaking changes (if applicable)
+
+**Repository State**:
+- [ ] All changes committed to main branch
+- [ ] Git repository clean (no uncommitted changes)
+- [ ] Git tags follow semantic versioning
+- [ ] GitHub release created with detailed release notes
+
+**Communication**:
+- [ ] Pre-release status clearly marked in README
+- [ ] Breaking change policy documented
+- [ ] Expected stability communicated clearly
+- [ ] Feedback channels established (GitHub issues)
+
+### Communication Strategy
+
+**Pre-Release Transparency**:
+The library is clearly marked as pre-release in all documentation:
+
+```markdown
+## Status: Pre-Release (v0.x.x)
+
+**go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released. Production use is supported, but be prepared for potential breaking changes.
+
+We actively seek feedback on API design, missing capabilities, and integration challenges. Please open issues for any concerns or suggestions.
+```
+
+**Version Communication**:
+- Each release includes detailed changelog
+- Breaking changes highlighted prominently
+- Migration examples provided inline
+- Deprecation warnings added to code with removal version noted
+- Community notified through GitHub releases
+
+**Feedback Channels**:
+- GitHub issues for bug reports and feature requests
+- GitHub discussions for API design conversations
+- Detailed issue templates for structured feedback
+- Regular review of integration challenges from supplemental packages
+
+### Promotion to v1.0.0
+
+**Stability Criteria**:
+The library graduates to v1.0.0 when:
+- All three supplemental packages developed and validated
+- No significant API concerns identified during supplemental package development
+- Community feedback addressed and incorporated
+- API surface complete for primitive interface library scope
+- Documentation comprehensive and accurate
+- Test coverage maintained above 80%
+- Minimum 2-3 months of pre-release usage without major issues
+- Confidence in long-term API stability commitment
+
+**Post-1.0.0 Commitment**:
+Once v1.0.0 is released:
+- API stability guaranteed within major version
+- Breaking changes only in major version increments
+- Backward compatibility maintained for v1.x.x series
+- Deprecation cycle for any API changes (minimum one minor version)
+- Predictable upgrade path for consumers
+
+## Supplemental Package Development Roadmap
+
+The supplemental package roadmap establishes three independent, production-ready libraries that extend the go-agents primitive interface library. Each package is developed as a standalone repository depending only on the published go-agents library.
 
 ### Overview
 
-**Development Approach**: Build production libraries through standalone, demonstrable examples. Each example validates specific patterns and reveals tooling requirements, preventing premature abstraction while creating reusable infrastructure.
+**Development Approach**: Build supplemental packages as independent repositories, each depending solely on the published go-agents library. This approach validates the go-agents API design through real-world usage, ensures each package can be used independently or composed together, and builds practical experience with Go package lifecycle management.
 
-**Driving Use Case**: Document classification service for detecting DoD security classification markings in documents. This real-world requirement guides the examples roadmap and ensures practical utility of developed tooling.
+**Development Sequence**: Orchestration → Document Processing → Services. The sequence reflects practical development priorities rather than dependency chains—each package depends only on go-agents.
 
-**Deliverables**:
-1. **go-agents-document-context**: Universal document → text context conversion
-2. **go-agents-orchestration**: Go-native agent coordination with state management
+**Integration Demonstration**: Document classification service serves as a reference implementation showing how all packages compose together in a production application.
+
+**Supplemental Packages**:
+1. **go-agents-orchestration**: Agent coordination, workflow management, and state machines
+2. **go-agents-document-context**: Universal document → text context conversion
 3. **go-agents-services**: HTTP service primitives for agent-backed APIs
 
 ### Package Organization
 
-Examples use a structured package layout that mirrors future standalone libraries:
+Each supplemental package is structured as an independent Go module with its own repository:
 
 ```
-examples/
-├── pkg/                    # Reusable infrastructure extracted to standalone packages
-│   ├── document-context/   # Future: github.com/JaimeStill/go-agents-document-context
-│   │   ├── processor.go    # Core processor interface
-│   │   ├── registry.go     # Format processor registry
-│   │   ├── formats/        # Format-specific extractors
-│   │   │   ├── pdf.go      # PDF text extraction
-│   │   │   ├── docx.go     # OpenXML .docx processing
-│   │   │   ├── xlsx.go     # OpenXML .xlsx processing
-│   │   │   ├── pptx.go     # OpenXML .pptx processing
-│   │   │   └── image.go    # OCR-based text extraction
-│   │   └── context.go      # Context structure and optimization
-│   │
-│   ├── orchestration/      # Future: github.com/JaimeStill/go-agents-orchestration
-│   │   ├── hub/            # Multi-hub coordination
-│   │   │   ├── hub.go      # Hub interface and implementation
-│   │   │   ├── channel.go  # Message channels
-│   │   │   └── registry.go # Agent registration
-│   │   ├── messaging/      # Inter-agent messaging
-│   │   │   ├── message.go  # Message structures
-│   │   │   ├── builder.go  # Message builders
-│   │   │   └── filter.go   # Message filtering
-│   │   ├── state/          # Workflow state management
-│   │   │   ├── graph.go    # State graph execution
-│   │   │   ├── state.go    # State structures
-│   │   │   └── transition.go # State transitions
-│   │   ├── patterns/       # Composition patterns
-│   │   │   ├── chain.go    # Sequential chains
-│   │   │   ├── parallel.go # Parallel execution
-│   │   │   └── router.go   # Conditional routing
-│   │   └── observability/  # Execution observability
-│   │       ├── trace.go    # Execution trace capture
-│   │       ├── decision.go # Decision point logging
-│   │       ├── confidence.go # Confidence scoring utilities
-│   │       └── metrics.go  # Performance metrics
-│   │
-│   └── services/           # Future: github.com/JaimeStill/go-agents-services
-│       ├── server.go       # HTTP server primitives
-│       ├── handler.go      # Agent-backed handlers
-│       ├── lifecycle.go    # Agent lifecycle management
-│       └── middleware.go   # Service middleware
-│
-├── 01-document-processor/  # Phase 1: Document processing foundation
-├── 02-document-analysis/   # Phase 1: Hybrid Go + agent workflow
-├── 03-sequential-chain/    # Phase 2: Agent communication primitives
-├── 04-parallel-execution/  # Phase 2: Concurrent agent execution
-├── 05-conditional-routing/ # Phase 2: State-driven routing
-├── 06-stateful-workflow/   # Phase 2: Complex workflow with state
-├── 07-multi-hub-coordination/ # Phase 3: Hierarchical coordination
-├── 08-http-agent-endpoint/ # Phase 4: Agent-backed REST API
-├── 09-hybrid-workflow-service/ # Phase 4: Go + agent integration
-└── 10-document-classification-service/ # Phase 5: Full integration
+github.com/JaimeStill/go-agents-orchestration/
+├── hub/                    # Multi-hub coordination
+│   ├── hub.go              # Hub interface and implementation
+│   ├── channel.go          # Message channels
+│   └── registry.go         # Agent registration
+├── messaging/              # Inter-agent messaging
+│   ├── message.go          # Message structures
+│   ├── builder.go          # Message builders
+│   └── filter.go           # Message filtering
+├── state/                  # Workflow state management
+│   ├── graph.go            # State graph execution
+│   ├── state.go            # State structures
+│   └── transition.go       # State transitions
+├── patterns/               # Composition patterns
+│   ├── chain.go            # Sequential chains
+│   ├── parallel.go         # Parallel execution
+│   └── router.go           # Conditional routing
+└── observability/          # Execution observability
+    ├── trace.go            # Execution trace capture
+    ├── decision.go         # Decision point logging
+    ├── confidence.go       # Confidence scoring utilities
+    └── metrics.go          # Performance metrics
+
+github.com/JaimeStill/go-agents-document-context/
+├── processor.go            # Core processor interface
+├── registry.go             # Format processor registry
+├── formats/                # Format-specific extractors
+│   ├── pdf.go              # PDF text extraction
+│   ├── docx.go             # OpenXML .docx processing
+│   ├── xlsx.go             # OpenXML .xlsx processing
+│   ├── pptx.go             # OpenXML .pptx processing
+│   └── image.go            # OCR-based text extraction
+└── context.go              # Context structure and optimization
+
+github.com/JaimeStill/go-agents-services/
+├── server.go               # HTTP server primitives
+├── handler.go              # Agent-backed handlers
+├── lifecycle.go            # Agent lifecycle management
+└── middleware.go           # Service middleware
 ```
 
-### Phase 1: Document Processing Foundation
+### go-agents-orchestration
 
-**Goal**: Establish reusable document → context conversion capability using pure Go.
+**Repository**: `github.com/JaimeStill/go-agents-orchestration`
+**Dependency**: `github.com/JaimeStill/go-agents@v0.x.x`
+**Development Priority**: First (enables agent coordination patterns)
 
-**Package Development**: `examples/pkg/document-context/`
+**Purpose**: Provide Go-native agent coordination primitives with LangGraph-inspired state management, multi-hub messaging architecture, and composable workflow patterns.
 
-#### Example 1: `document-processor/`
+**Core Capabilities**:
 
-**Purpose**: Standalone document → text context conversion tool
+**Hub Architecture**:
+- Multi-hub coordination with hierarchical organization
+- Agent registration across multiple hubs with context-aware handlers
+- Cross-hub message routing and pub/sub patterns
+- Hub lifecycle management (initialization, shutdown, cleanup)
+- Foundation for recursive composition (hubs containing orchestrator agents managing sub-hubs)
+- Port hub implementation from `go-agents-research` repository
 
-**Architecture**:
-- Core `Processor` interface in `document-context/processor.go`
-- Format-specific implementations in `document-context/formats/`
-- Format detection → processor selection → text context output
-- Pure Go implementation (no external dependencies where possible)
+**Messaging Primitives**:
+- Structured message types for inter-agent communication
+- Message builders for constructing complex communications
+- Message filtering and routing logic
+- Channel-based message delivery using Go concurrency
+
+**State Management**:
+- State graph execution with transitions and predicates
+- State structure definitions and mutation patterns
+- Checkpointing for recovery and rollback
+- Cycle detection and loop handling
+- Leverage Go concurrency primitives (channels, goroutines, contexts)
+- Explore Go-native patterns rather than directly porting Python approaches
+
+**Workflow Patterns**:
+- **Sequential chains**: Linear workflows with state accumulation
+- **Parallel execution**: Fan-out/fan-in with state merge and result aggregation
+- **Conditional routing**: State-based routing decisions with dynamic handler selection
+- **Stateful workflows**: Complex state machines with cycles, retries, and checkpoints
+
+**Observability Infrastructure**:
+- Execution trace capture across workflow steps
+- Decision point logging with reasoning
+- Confidence scoring utilities for agent outputs
+- Performance metrics (token usage, timing, retries)
+- Designed for production debugging and optimization
+
+**Agent Role Abstractions**:
+- **Orchestrator**: Supervisory agents driving workflows, registered in multiple hubs
+- **Processor**: Functional agents with clear input→output contracts
+- **Actor**: Profile-based agents with perspectives (foundation for future expansion)
+
+**Key Architectural Questions**:
+- State management: Are Go channels + contexts sufficient, or do we need more sophisticated state machines?
+- Hub scalability: Can the hub pattern support recursive composition?
+- Observability overhead: How much observability can we add without impacting performance?
+- Go concurrency patterns: What unique state management patterns emerge from Go's concurrency model?
+
+### go-agents-document-context
+
+**Repository**: `github.com/JaimeStill/go-agents-document-context`
+**Dependency**: `github.com/JaimeStill/go-agents@v0.x.x`
+**Development Priority**: Second (provides document processing for integration scenarios)
+
+**Purpose**: Universal document → text context conversion for LLM consumption. Extract text from various document formats using pure Go implementations, optimize context structure for token efficiency, and provide clean interfaces for document processing pipelines.
+
+**Core Capabilities**:
+
+**Document Processing**:
+- Core `Processor` interface for format-agnostic document handling
+- Format detection and automatic processor selection
+- Registry pattern for extensible format support
+- Streaming support for large documents
+- Pure Go implementations (minimize external dependencies)
 
 **Supported Formats**:
 - **PDF**: Text extraction using pure Go libraries (pdfcpu or similar)
 - **Office Documents**: OpenXML processing for .docx, .xlsx, .pptx
-  - Minimal extraction: unzip archive → parse XML → extract text
-  - No SDK dependencies, direct OpenXML standard implementation
+  - Minimal extraction approach: unzip archive → parse XML → extract text
+  - Direct OpenXML standard implementation (no SDK dependencies)
+  - Support for structured data extraction from spreadsheets and presentations
 - **Images**: OCR-based text extraction (gosseract or similar)
+  - Integration with Tesseract for optical character recognition
+  - Support for common image formats (PNG, JPEG, TIFF)
 
-**Key Patterns**:
-- Registry pattern for format processors
-- Clean error handling and validation
-- Streaming support for large files
+**Context Optimization**:
+- Context structure design for LLM consumption
+- Chunking strategies for long documents
+- Metadata extraction (title, author, creation date, page count)
+- Token usage optimization through preprocessing
+- Format-specific context enhancement (tables, lists, structure preservation)
 
-**Learning Objectives**:
-- Which formats require special handling?
-- What context structure optimizes token usage?
-- How to minimize external dependencies?
+**Integration Patterns**:
+- Standalone usage (document processing without agents)
+- Hybrid workflows (Go preprocessing + agent analysis)
+- When to extract text vs. when to use vision protocols
+- Error boundaries for document processing failures
 
-#### Example 2: `document-analysis/`
+**Key Architectural Questions**:
+- Which formats require special handling beyond basic text extraction?
+- What context structure optimizes token usage while preserving meaning?
+- How to minimize external dependencies while maintaining quality?
+- OpenXML processing: Can we implement minimal document extraction without external SDKs?
+- Token optimization: How much Go preprocessing reduces token costs while maintaining quality?
 
-**Purpose**: Demonstrate hybrid Go + Agent workflow for document understanding
+### go-agents-services
 
-**Workflow**:
-1. **Go**: Document processor extracts text
-2. **Go**: Optimize context structure (chunking, metadata extraction)
-3. **Agent**: Chat/completion protocol for analysis (not vision!)
-4. **Go**: Format and return results
+**Repository**: `github.com/JaimeStill/go-agents-services`
+**Dependency**: `github.com/JaimeStill/go-agents@v0.x.x`
+**Development Priority**: Third (enables production HTTP service patterns)
 
-**Key Patterns**:
-- When to use Go vs Agent processing
-- Context optimization for token efficiency
-- Result handling and error boundaries
+**Purpose**: HTTP service primitives for building agent-backed REST APIs. Provides patterns for agent lifecycle management in service context, containerization templates, and integration patterns for production deployments.
 
-**Learning Objectives**:
-- Optimal context structure for agent consumption
-- Token optimization through Go preprocessing
-- Error boundary placement in hybrid workflows
+**Core Capabilities**:
 
-### Phase 2: Agent Communication Primitives
+**HTTP Server Primitives**:
+- Server initialization and configuration
+- Graceful shutdown with agent cleanup
+- Health check and readiness endpoints
+- Request/response handling patterns
+- Middleware chains for cross-cutting concerns
 
-**Goal**: Establish Go-native agent coordination patterns with LangGraph-inspired state management.
-
-**Package Development**: `examples/pkg/orchestration/patterns/`, `examples/pkg/orchestration/state/`
-
-**State Management Philosophy**: Leverage Go concurrency primitives (channels, goroutines, contexts) to build state machines and workflow patterns. Explore what's uniquely possible with Go's concurrency model rather than directly porting Python patterns.
-
-#### Example 3: `sequential-chain/`
-
-**Pattern**: Linear workflow with state accumulation
-
-**Agents**: Parser → Enricher → Summarizer
-
-**State Management**:
-- State object threaded through agent chain
-- Each agent adds to shared state via channels
-- Error propagation through the chain
-
-**Go Concurrency**: Channel-based state threading between goroutines
-
-**Learning Objectives**:
-- How state flows through goroutine chains
-- Error handling in sequential workflows
-- Result accumulation patterns
-
-#### Example 4: `parallel-execution/`
-
-**Pattern**: Fan-out/fan-in with state merge
-
-**Agents**: Coordinator + Worker pool
-
-**State Management**:
-- Coordinator maintains overall state
-- Workers contribute partial results via channels
-- State merge using sync primitives
-
-**Go Concurrency**: WaitGroup + channel fan-out/fan-in patterns
-
-**Learning Objectives**:
-- Concurrent state updates and synchronization
-- Result aggregation from parallel workers
-- Timeout and cancellation handling
-
-#### Example 5: `conditional-routing/`
-
-**Pattern**: State-based routing decisions
-
-**Agents**: Router + Specialist handlers
-
-**State Management**:
-- Router examines state and selects handler
-- State updates reflect routing decisions
-- Dynamic handler selection based on state predicates
-
-**Go Concurrency**: Select-based routing, dynamic handler dispatch
-
-**Learning Objectives**:
-- State-driven decision making
-- Dynamic routing logic
-- Handler selection patterns
-
-#### Example 6: `stateful-workflow/`
-
-**Pattern**: Complex workflow with cycles and checkpoints
-
-**Agents**: Multi-step process with loops, retries, and state snapshots
-
-**State Management**:
-- Full state machine with transitions
-- Checkpointing for recovery
-- Cycle detection and loop handling
-- Rollback capability
-
-**Go Concurrency**: State machine built on Go concurrency primitives
-
-**Package Development**: `examples/pkg/orchestration/state/` - State graph, transitions, persistence
-
-**Learning Objectives**:
-- Complex state machine patterns in Go
-- Checkpoint and recovery mechanisms
-- Cycle handling and termination
-
-### Phase 3: Multi-Hub Orchestration
-
-**Goal**: Demonstrate hierarchical agent coordination with cross-hub messaging.
-
-**Package Development**: `examples/pkg/orchestration/hub/`, `examples/pkg/orchestration/messaging/`
-
-#### Example 7: `multi-hub-coordination/`
-
-**Pattern**: Hierarchical hub organization with cross-hub messaging
-
-**Hub Architecture**:
-- **Global Hub**: System-wide coordination
-- **Task Hub**: Workflow management
-- **Department Hub**: Team-specific communication
-
-**Agent Roles** (preview of future evolution):
-- **Orchestrator**: Supervisor agent registered across all hubs, driving workflows
-- **Processors**: Worker agents performing specific tasks in task hub
-- **Actors**: Department-specific agents with contextual perspectives
-
-**Key Patterns**:
-- Agent registration in multiple hubs with context-aware handlers
-- Cross-hub message routing
-- Pub/sub within and across hubs
-- Hub lifecycle management
-
-**Hierarchical Composition**: Demonstrate how hub pattern supports recursive composition (hubs containing orchestrator agents managing sub-hubs)
-
-**Learning Objectives**:
-- Multi-hub coordination patterns
-- Cross-hub messaging strategies
-- Hierarchical agent organization
-- Foundation for recursive composition
-
-**Package Extraction**: Port hub code from research repo (`~/code/go-agents-research/hub/`) to `examples/pkg/orchestration/hub/`
-
-### Phase 4: HTTP Service Integration
-
-**Goal**: Establish patterns for agent-backed HTTP services with containerization.
-
-**Package Development**: `examples/pkg/services/`
-
-**Containerization Requirements**: Each service example includes:
-- `Dockerfile` for containerization
-- `docker-compose.yml` for local deployment
-- `config/` directory with environment-specific configurations
-- Configuration via environment variables + config files
-
-#### Example 8: `http-agent-endpoint/`
-
-**Pattern**: REST API with agent processing
-
-**Endpoints**:
-- `POST /analyze` - Simple request → agent → response
-- `POST /workflow` - Multi-step workflow with state
-
-**Key Patterns**:
-- Agent lifecycle in service context (initialization, shutdown)
-- Request handling and response formatting
+**Agent Lifecycle Management**:
+- Agent initialization at service startup
 - Connection pooling and resource management
-- Configuration-driven agent initialization
+- Agent reuse across requests
+- Cleanup on service shutdown
+- Error recovery and circuit breaking
+
+**Handler Patterns**:
+- Simple request → agent → response pattern
+- Multi-step workflow with state management
+- File upload handling (documents, images)
+- Streaming response support
+- Error handling and response formatting
 
 **Containerization**:
-```bash
-docker compose up
-curl -X POST http://localhost:8080/analyze -d '{"text": "analyze this"}'
-```
+- `Dockerfile` templates for production deployment
+- `docker-compose.yml` for local development
+- Multi-stage builds for minimal image size
+- Configuration via environment variables + config files
+- Health checks and container orchestration support
 
-**Learning Objectives**:
-- Service startup/shutdown patterns
-- Agent pooling and reuse
-- Error handling in HTTP context
-- Configuration management for services
+**Configuration Management**:
+- Environment-specific configuration
+- Secret management (API keys, credentials)
+- Configuration validation at startup
+- Runtime configuration updates (where applicable)
+- Configuration for different environments (air-gapped, cloud, hybrid)
 
-#### Example 9: `hybrid-workflow-service/`
+**Integration Patterns**:
+- REST API with agent processing
+- Hybrid workflows (Go preprocessing + agent intelligence)
+- Document processing services (upload → process → analyze)
+- Multi-agent workflow coordination
+- Observability integration (logging, metrics, tracing)
 
-**Pattern**: Go workflow with embedded agent intelligence
+**Key Architectural Questions**:
+- Agent lifecycle: How to manage agents in long-running services?
+- Connection pooling: How to reuse agent connections efficiently?
+- Error handling: What error boundaries prevent cascading failures?
+- Configuration flexibility: Can services be reconfigured for different environments through config alone?
+- Resource management: How to handle resource limits in containerized services?
 
-**Workflow**:
-1. HTTP request with document upload
-2. Go: Document processing (extraction)
-3. Go: Context optimization
-4. Agent: Intelligent analysis
-5. Go: Result formatting
-6. HTTP response
+### Integration Reference Implementation
 
-**Key Patterns**:
-- Best-of-both-worlds: Go for efficiency, agents for intelligence
-- Minimize token costs through Go preprocessing
-- Workflow orchestration across Go and agent processing
+The document classification service serves as a reference implementation demonstrating how all supplemental packages compose together in a production application.
 
-**Containerization**:
-```bash
-docker compose up
-curl -X POST http://localhost:8080/process \
-  -F "file=@document.pdf" \
-  -F "operation=summarize"
-```
-
-**Learning Objectives**:
-- Go vs Agent decision boundaries
-- Token cost optimization
-- Production workflow patterns
-- Resource management in containerized services
-
-### Phase 5: Full Integration
-
-**Goal**: Demonstrate complete integration of all developed tooling in production service.
-
-#### Example 10: `document-classification-service/`
+**Repository**: `github.com/JaimeStill/document-classification-service`
+**Dependencies**:
+- `github.com/JaimeStill/go-agents@v0.x.x`
+- `github.com/JaimeStill/go-agents-orchestration@v0.x.x`
+- `github.com/JaimeStill/go-agents-document-context@v0.x.x`
+- `github.com/JaimeStill/go-agents-services@v0.x.x`
 
 **Use Case**: Detect DoD security classification markings in documents
 
 **Classification Types**: Unclassified, Confidential, Secret, Top Secret
 
 **Architecture Integration**:
-- **Document Processing**: `document-context` package for text extraction
-- **Sequential Chain**: Parser → Classifier → Validator workflow
-- **Conditional Routing**: Different validators per classification level
-- **Multi-Hub Orchestration**: Audit hub logs all classification decisions
-- **HTTP Service**: REST API for document upload and classification
-- **Observability**: Full execution trace, confidence scoring, decision logging
+- **Document Processing**: `go-agents-document-context` for text extraction from uploaded documents
+- **Sequential Chain**: Parser → Classifier → Validator workflow using `go-agents-orchestration` patterns
+- **Conditional Routing**: State-based routing to classification-specific validators using orchestration router pattern
+- **Multi-Hub Orchestration**: Audit hub logs all classification decisions using hub coordination primitives
+- **HTTP Service**: REST API built with `go-agents-services` for document upload and classification
+- **Observability**: Full execution trace, confidence scoring, decision logging via orchestration observability infrastructure
 
 **Service Workflow**:
 1. HTTP endpoint receives document upload
-2. Document processor extracts text (Go)
-3. Sequential agent chain processes document:
+2. `go-agents-document-context` extracts text (Go preprocessing)
+3. Sequential agent chain processes document using `go-agents-orchestration`:
    - Parser: Extract potential classification markers
-   - Classifier: Determine classification level
+   - Classifier: Determine classification level using `go-agents`
    - Validator: Verify classification evidence
-4. Conditional routing: Route to classification-specific validator
+4. Conditional routing: Route to classification-specific validator based on state
 5. Multi-hub audit: Log classification decision to audit hub
 6. HTTP response with classification + confidence + evidence + trace
 
@@ -514,64 +577,19 @@ docker compose up
 curl -X POST http://localhost:8080/classify -F "file=@classified-doc.pdf"
 ```
 
-**Learning Objectives**:
-- Production integration patterns
+**Demonstrates**:
+- Production integration patterns across all packages
 - Observability in production workflows
 - Confidence scoring and evidence tracking
 - Audit trail requirements
-- Performance optimization
+- Performance optimization through Go preprocessing
+- Composition of independent packages
+- Real-world value of the go-agents ecosystem
 
-### Agent Roles Evolution
-
-While not implemented in initial examples, the architecture supports evolution toward specialized agent roles:
-
-**Orchestrator** (Example 7+): Supervisory agents driving workflows, registered in multiple hubs
-
-**Processor** (Examples 3-6): Functional agents with clear input→output contracts, stateless where possible
-
-**Actor** (Future): Profile-based agents with perspectives, experience accumulation, contextual memory
-
-**Recursive Composition**: Hub architecture designed to enable hubs containing orchestrator agents managing sub-hubs, creating fractal organizational patterns.
-
-### Key Architectural Decisions to Validate
-
-Through examples development, validate:
-
-1. **State Management**: Are Go channels + contexts sufficient, or do we need more sophisticated state machines?
-2. **Hub Scalability**: Can the hub pattern support recursive composition (hubs containing orchestrator agents managing sub-hubs)?
-3. **Observability Overhead**: How much observability can we add without impacting production performance?
-4. **Configuration Flexibility**: Can services be reconfigured for different environments (air-gapped, cloud, hybrid) through config alone?
-5. **Token Optimization**: How much Go preprocessing reduces token costs while maintaining quality?
-6. **OpenXML Processing**: Can we implement minimal document extraction without external SDKs?
-7. **Go Concurrency Patterns**: What unique state management patterns emerge from Go's concurrency model?
-
-### Supplemental Package Extraction
-
-Once examples validate patterns, extract to standalone libraries:
-
-**go-agents-document-context**:
-- Migrate `examples/pkg/document-context/` to standalone repo
-- Publish as independent library for document processing
-- Reusable across any Go application (not agent-specific)
-
-**go-agents-orchestration**:
-- Migrate `examples/pkg/orchestration/` to standalone repo
-- Publish as agent coordination library
-- Provides hub, messaging, state, and pattern primitives
-
-**go-agents-services**:
-- Migrate `examples/pkg/services/` to standalone repo
-- Publish as HTTP service primitives for agent-backed APIs
-- Containerization templates and patterns
-
-**Documentation Classification Service**:
-- Reference implementation using all three libraries
-- Production-ready example for enterprise adoption
-- Demonstrates full capability of tooling ecosystem
 
 ## Future Enhancements
 
-These features and capabilities are envisioned for development after the Examples Roadmap completes:
+These features and capabilities are envisioned for development after the supplemental package development roadmap completes:
 
 ### Developer Toolkit (Stretch Goal)
 
@@ -674,58 +692,9 @@ These protocol extensions expand the library's capabilities to additional intera
 - Inference API integration
 - Model hub browsing
 
-### Publishing and Versioning
-
-Once the Examples Roadmap completes and supplemental packages are validated, the library ecosystem will be published.
-
-### Pre-Release Strategy
-
-**Version Numbering**:
-- Pre-release versions: `v0.1.0`, `v0.2.0`, etc.
-- Release candidates: `v1.0.0-rc.1`, `v1.0.0-rc.2`, etc.
-- Stable release: `v1.0.0`
-
-**Publishing Checklist**:
-- [ ] All unit tests passing with 80%+ coverage
-- [ ] README examples verified via `tools/prompt-agent`
-- [ ] Complete package documentation (godoc)
-- [ ] README updated with installation and usage instructions
-- [ ] ARCHITECTURE.md reflects current implementation
-- [ ] CHANGELOG.md created with version history
-- [ ] Git tags for semantic versioning
-- [ ] GitHub release with release notes
-
-**Versioning Philosophy**:
-- Follow [Semantic Versioning 2.0.0](https://semver.org/)
-- Pre-1.0 versions (v0.x.x) may introduce breaking changes between minor versions
-- Post-1.0 versions guarantee backward compatibility within major versions
-- Breaking changes require major version bump (e.g., v1.x.x → v2.0.0)
-
-**Go Module Publishing**:
-```bash
-# Tag the release
-git tag v0.1.0
-git push origin v0.1.0
-
-# Go modules will automatically pick up the tagged version
-# Users can install with: go get github.com/JaimeStill/go-agents@v0.1.0
-```
-
-**Feedback Period**:
-- Maintain v0.x.x series for at least 2-3 months
-- Gather community feedback on API design
-- Make necessary breaking changes before v1.0.0
-- Stabilize API surface for v1.0.0 release
-
-**Pre-1.0 Communication**:
-- Clearly mark as pre-release in README
-- Document expected stability and breaking change policy
-- Provide migration guides for breaking changes
-- Maintain CHANGELOG with detailed upgrade notes
-
 ### Additional Supplemental Packages
 
-These packages extend the go-agents ecosystem beyond the three core libraries developed through the Examples Roadmap:
+These packages extend the go-agents ecosystem beyond the three core libraries developed through the supplemental package development roadmap:
 
 #### go-agents-tools
 

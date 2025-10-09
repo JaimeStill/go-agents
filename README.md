@@ -2,6 +2,10 @@
 
 A platform and model agnostic Go agent primitive library.
 
+## Status: Pre-Release (v0.1.0)
+
+**go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
+
 ## Documentation
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)**: Technical specifications and implementation details
