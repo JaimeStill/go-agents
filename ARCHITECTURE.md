@@ -255,6 +255,7 @@ Agents provide high-level orchestration with protocol-specific methods:
 
 ```go
 type Agent interface {
+    ID() string
     Client() transport.Client
     Provider() providers.Provider
     Model() models.Model
@@ -270,6 +271,56 @@ type Agent interface {
 
     Embed(ctx context.Context, input string) (*protocols.EmbeddingsResponse, error)
 }
+```
+
+#### Agent Identification
+
+Each agent has a unique identifier assigned at creation time that remains stable throughout its lifetime.
+
+**ID Generation**:
+- UUIDv7 format: time-sortable with nanosecond precision
+- Auto-generated during agent creation
+- Collision-resistant across distributed systems
+- Thread-safe for concurrent access
+
+**ID Guarantees**:
+- **Uniqueness**: Each agent receives a globally unique identifier
+- **Stability**: ID never changes after creation
+- **Thread-Safety**: Safe to call `ID()` from multiple goroutines
+- **Map Key Safety**: Safe to use as map keys in registries and routing tables
+
+**Orchestration Use Cases**:
+- **Hub Registration**: Register agents in multi-hub coordination systems
+- **Message Routing**: Route messages to specific agents using their IDs
+- **Lifecycle Tracking**: Track agent creation, activity, and destruction
+- **Distributed Tracing**: Correlate agent operations across service boundaries
+- **Observability**: Aggregate metrics and logs by agent ID
+
+**Example - Hub Registration**:
+```go
+// Create multiple agents
+agent1, _ := agent.New(config)
+agent2, _ := agent.New(config)
+
+// Register in hub using IDs
+hub.Register(agent1.ID(), agent1)
+hub.Register(agent2.ID(), agent2)
+
+// Route message to specific agent
+hub.SendTo(agent1.ID(), message)
+```
+
+**Example - Distributed Tracing**:
+```go
+agent, _ := agent.New(config)
+
+// Include agent ID in structured logs
+log.Info("agent processing request",
+    "agent_id", agent.ID(),
+    "request_id", requestID)
+
+// Correlate operations across service boundaries
+ctx = context.WithValue(ctx, "agent_id", agent.ID())
 ```
 
 ## Configuration System

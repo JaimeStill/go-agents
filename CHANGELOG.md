@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.1.1] - 2025-10-10
+
+**Added**:
+- `ID() string` method to Agent interface returning unique UUIDv7 identifier
+
 ## [v0.1.0] - 2025-10-09
 
 Initial pre-release.

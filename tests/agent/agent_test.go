@@ -795,3 +795,217 @@ func TestAgent_Embed(t *testing.T) {
 		t.Errorf("got input %q, want %q", input, "test text")
 	}
 }
+
+// Orchestration-focused tests for Agent ID behavior
+
+func TestAgent_ID_Uniqueness(t *testing.T) {
+	// Test that multiple agents get unique IDs
+	// Critical for hub registration without collisions
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.AgentConfig{
+		Transport: &config.TransportConfig{
+			Provider: &config.ProviderConfig{
+				Name:    "ollama",
+				BaseURL: server.URL,
+				Model: &config.ModelConfig{
+					Name: "test-model",
+					Capabilities: map[string]config.CapabilityConfig{
+						"chat": {
+							Format:  "openai-chat",
+							Options: map[string]any{},
+						},
+					},
+				},
+			},
+			Timeout:            config.Duration(30 * time.Second),
+			ConnectionTimeout:  config.Duration(10 * time.Second),
+			ConnectionPoolSize: 10,
+		},
+	}
+
+	// Create multiple agents
+	agents := make([]agent.Agent, 10)
+	ids := make(map[string]bool)
+
+	for i := 0; i < 10; i++ {
+		a, err := agent.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create agent %d: %v", i, err)
+		}
+		agents[i] = a
+
+		id := a.ID()
+		if ids[id] {
+			t.Errorf("duplicate ID found: %s", id)
+		}
+		ids[id] = true
+	}
+
+	if len(ids) != 10 {
+		t.Errorf("expected 10 unique IDs, got %d", len(ids))
+	}
+}
+
+func TestAgent_ID_Stability(t *testing.T) {
+	// Test that ID() returns the same value across multiple calls
+	// Critical for using agent as stable registry key
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.AgentConfig{
+		Transport: &config.TransportConfig{
+			Provider: &config.ProviderConfig{
+				Name:    "ollama",
+				BaseURL: server.URL,
+				Model: &config.ModelConfig{
+					Name: "test-model",
+					Capabilities: map[string]config.CapabilityConfig{
+						"chat": {
+							Format:  "openai-chat",
+							Options: map[string]any{},
+						},
+					},
+				},
+			},
+			Timeout:            config.Duration(30 * time.Second),
+			ConnectionTimeout:  config.Duration(10 * time.Second),
+			ConnectionPoolSize: 10,
+		},
+	}
+
+	a, err := agent.New(cfg)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Call ID() multiple times
+	firstID := a.ID()
+	for i := 0; i < 100; i++ {
+		id := a.ID()
+		if id != firstID {
+			t.Errorf("ID changed on call %d: got %s, want %s", i, id, firstID)
+		}
+	}
+}
+
+func TestAgent_ID_Format(t *testing.T) {
+	// Test that ID is non-empty and valid UUID format
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.AgentConfig{
+		Transport: &config.TransportConfig{
+			Provider: &config.ProviderConfig{
+				Name:    "ollama",
+				BaseURL: server.URL,
+				Model: &config.ModelConfig{
+					Name: "test-model",
+					Capabilities: map[string]config.CapabilityConfig{
+						"chat": {
+							Format:  "openai-chat",
+							Options: map[string]any{},
+						},
+					},
+				},
+			},
+			Timeout:            config.Duration(30 * time.Second),
+			ConnectionTimeout:  config.Duration(10 * time.Second),
+			ConnectionPoolSize: 10,
+		},
+	}
+
+	a, err := agent.New(cfg)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	id := a.ID()
+
+	// Verify non-empty
+	if id == "" {
+		t.Error("ID is empty")
+	}
+
+	// Verify valid UUID format
+	// UUIDs are 36 characters: 8-4-4-4-12
+	if len(id) != 36 {
+		t.Errorf("ID length is %d, want 36 (standard UUID format)", len(id))
+	}
+
+	// Verify contains hyphens in correct positions
+	if id[8] != '-' || id[13] != '-' || id[18] != '-' || id[23] != '-' {
+		t.Errorf("ID does not match UUID format: %s", id)
+	}
+}
+
+func TestAgent_ID_Concurrent(t *testing.T) {
+	// Test that ID() is thread-safe for concurrent access
+	// Critical for hub usage with concurrent goroutines
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.AgentConfig{
+		Transport: &config.TransportConfig{
+			Provider: &config.ProviderConfig{
+				Name:    "ollama",
+				BaseURL: server.URL,
+				Model: &config.ModelConfig{
+					Name: "test-model",
+					Capabilities: map[string]config.CapabilityConfig{
+						"chat": {
+							Format:  "openai-chat",
+							Options: map[string]any{},
+						},
+					},
+				},
+			},
+			Timeout:            config.Duration(30 * time.Second),
+			ConnectionTimeout:  config.Duration(10 * time.Second),
+			ConnectionPoolSize: 10,
+		},
+	}
+
+	a, err := agent.New(cfg)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	expectedID := a.ID()
+
+	// Access ID concurrently from multiple goroutines
+	const numGoroutines = 100
+	done := make(chan bool, numGoroutines)
+	errors := make(chan string, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(goroutineID int) {
+			id := a.ID()
+			if id != expectedID {
+				errors <- fmt.Sprintf("goroutine %d got ID %s, want %s", goroutineID, id, expectedID)
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	close(errors)
+
+	// Check for any errors
+	for err := range errors {
+		t.Error(err)
+	}
+}
