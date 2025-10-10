@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"time"
 
 	"github.com/JaimeStill/go-agents/pkg/capabilities"
 	"github.com/JaimeStill/go-agents/pkg/config"
@@ -12,12 +11,23 @@ import (
 	"github.com/JaimeStill/go-agents/pkg/protocols"
 	"github.com/JaimeStill/go-agents/pkg/providers"
 	"github.com/JaimeStill/go-agents/pkg/transport"
+	"github.com/google/uuid"
 )
 
 // Agent provides a high-level interface for LLM interactions.
 // Methods are protocol-specific and handle message initialization,
 // system prompt injection, and response type assertions.
+//
+// Each agent has a unique identifier that remains stable across its lifetime.
+// The ID is used for orchestration scenarios including hub registration,
+// message routing, lifecycle tracking, and distributed tracing.
+// IDs are guaranteed to be unique, stable, and thread-safe.
 type Agent interface {
+	// ID returns the unique identifier for the agent.
+	// The ID is assigned at creation time using UUIDv7 and never changes.
+	// Thread-safe for concurrent access and safe to use as map keys.
+	ID() string
+
 	// Client returns the underlying transport client.
 	Client() transport.Client
 
@@ -56,14 +66,14 @@ type Agent interface {
 
 // agent implements the Agent interface with transport client orchestration.
 type agent struct {
+	id           string
 	client       transport.Client
 	systemPrompt string
-	maxRetries   int
-	timeout      time.Duration
 }
 
 // New creates a new Agent from configuration.
 // Creates the transport client and initializes system prompt.
+// Assigns a unique UUIDv7 identifier for orchestration and tracking.
 // Returns an error if transport client creation fails.
 func New(config *config.AgentConfig) (Agent, error) {
 	client, err := transport.New(config.Transport)
@@ -72,9 +82,14 @@ func New(config *config.AgentConfig) (Agent, error) {
 	}
 
 	return &agent{
+		id:           uuid.Must(uuid.NewV7()).String(),
 		client:       client,
 		systemPrompt: config.SystemPrompt,
 	}, nil
+}
+
+func (a *agent) ID() string {
+	return a.id
 }
 
 // Client returns the underlying transport client.
