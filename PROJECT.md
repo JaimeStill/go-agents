@@ -82,6 +82,11 @@ The MVP is **complete** and production-ready. All core functionality, testing in
 
 #### 1. Testing Infrastructure ✅ **Complete**
 
+**Mock Package** (Complete)
+- ✅ `pkg/mock`: Mock implementations for testing dependent code (86.8% coverage)
+- ✅ MockAgent, MockClient, MockProvider, MockModel, MockCapability types
+- ✅ Helper constructors for common scenarios (SimpleChatAgent, StreamingChatAgent, etc.)
+
 **Unit Tests** (Complete)
 - ✅ `pkg/config`: Configuration loading, merging, and validation (95.1% coverage)
 - ✅ `pkg/protocols`: Message, Request, Response structures and helpers (100.0% coverage)

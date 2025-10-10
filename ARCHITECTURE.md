@@ -33,8 +33,16 @@ pkg/
 │   └── ollama.go        # Ollama provider implementation
 ├── transport/           # Transport layer orchestrating requests across providers
 │   └── client.go        # Transport client interface and implementation
-└── agent/               # High-level agent orchestration
-    └── agent.go         # Agent interface and implementation
+├── agent/               # High-level agent orchestration
+│   └── agent.go         # Agent interface and implementation
+└── mock/                # Mock implementations for testing
+    ├── doc.go           # Package documentation
+    ├── agent.go         # MockAgent implementation
+    ├── client.go        # MockClient implementation
+    ├── provider.go      # MockProvider implementation
+    ├── model.go         # MockModel implementation
+    ├── capability.go    # MockCapability implementation
+    └── helpers.go       # Convenience constructors
 ```
 
 ## Core Components
@@ -586,6 +594,13 @@ tests/
 │   └── protocol_test.go
 ├── capabilities/
 │   └── ...
+├── mock/
+│   ├── agent_test.go
+│   ├── client_test.go
+│   ├── provider_test.go
+│   ├── model_test.go
+│   ├── capability_test.go
+│   └── helpers_test.go
 └── ...
 ```
 
@@ -704,3 +719,102 @@ go run tools/prompt-agent/main.go \
 - After provider-specific changes
 - When adding new capability formats
 - To verify configuration changes
+
+### Mock Package
+
+**Purpose**: The `pkg/mock` package provides configurable mock implementations of all core interfaces for testing code that depends on go-agents.
+
+**Package Structure**:
+```
+pkg/mock/
+├── doc.go           # Package documentation
+├── agent.go         # MockAgent implementation
+├── client.go        # MockClient implementation
+├── provider.go      # MockProvider implementation
+├── model.go         # MockModel implementation
+├── capability.go    # MockCapability implementation
+└── helpers.go       # Convenience constructors
+```
+
+**Mock Types**:
+
+1. **MockAgent** (`agent.go`)
+   - Implements: `agent.Agent`
+   - Configurable responses for: Chat, Vision, Tools, Embeddings
+   - Streaming support for Chat and Vision
+   - Options: `WithID`, `WithChatResponse`, `WithVisionResponse`, `WithToolsResponse`, `WithEmbeddingsResponse`, `WithStreamChunks`
+
+2. **MockClient** (`client.go`)
+   - Implements: `transport.Client`
+   - Configurable protocol execution and streaming
+   - Health status management
+   - Options: `WithExecuteResponse`, `WithStreamResponse`, `WithHealthy`, `WithHTTPClient`
+
+3. **MockProvider** (`provider.go`)
+   - Implements: `providers.Provider`
+   - Custom endpoint mapping per protocol
+   - Request preparation and response processing
+   - Options: `WithBaseURL`, `WithEndpointMapping`, `WithPrepareResponse`, `WithProcessResponse`
+
+4. **MockModel** (`model.go`)
+   - Implements: `models.Model`
+   - Configurable protocol support
+   - Capability management per protocol
+   - Options: `WithSupportedProtocols`, `WithProtocolCapability`, `WithProtocolOptions`
+
+5. **MockCapability** (`capability.go`)
+   - Implements: `capabilities.Capability` and `capabilities.StreamingCapability`
+   - Configurable validation, processing, and parsing
+   - Options: `WithValidateError`, `WithProcessedOptions`, `WithParseResponse`
+
+**Helper Constructors** (`helpers.go`):
+
+For common testing scenarios without manual configuration:
+
+```go
+// Simple chat agent
+agent := mock.NewSimpleChatAgent("id", "response text")
+
+// Streaming chat agent
+agent := mock.NewStreamingChatAgent("id", []string{"chunk1", "chunk2"})
+
+// Tools agent
+agent := mock.NewToolsAgent("id", []protocols.ToolCall{...})
+
+// Embeddings agent
+agent := mock.NewEmbeddingsAgent("id", []float64{0.1, 0.2, 0.3})
+
+// Multi-protocol agent
+agent := mock.NewMultiProtocolAgent("id")
+
+// Failing agent (for error handling tests)
+agent := mock.NewFailingAgent("id", errors.New("test error"))
+```
+
+**Usage Pattern**:
+
+The option pattern allows precise control over mock behavior:
+
+```go
+// Configure specific behaviors
+mockAgent := mock.NewMockAgent(
+    mock.WithID("custom-id"),
+    mock.WithChatResponse(&protocols.ChatResponse{...}, nil),
+    mock.WithStreamChunks([]protocols.StreamingChunk{...}, nil),
+)
+
+// Test error handling
+failingAgent := mock.NewMockAgent(
+    mock.WithID("failing-agent"),
+    mock.WithChatResponse(nil, errors.New("connection failed")),
+)
+```
+
+**Test Coverage**: The mock package has 86.8% test coverage with comprehensive tests in `tests/mock/`.
+
+**Use Cases**:
+- Testing orchestration systems without live LLM calls
+- Testing error handling and failure scenarios
+- Testing multi-agent coordination
+- Testing protocol-specific behavior
+- Unit testing supplemental packages that extend go-agents

@@ -783,6 +783,7 @@ go test ./tests/models/... -v
 go test ./tests/providers/... -v
 go test ./tests/transport/... -v
 go test ./tests/agent/... -v
+go test ./tests/mock/... -v
 ```
 
 **Generate coverage report:**
@@ -798,6 +799,59 @@ go tool cover -html=coverage.out -o coverage.html
 ```
 
 **Current Coverage**: 89.3% overall (exceeds 80% minimum requirement)
+
+### Testing Your Code
+
+The `pkg/mock` package provides mock implementations for testing code that depends on go-agents without requiring live LLM services.
+
+**Mock Types Available**:
+- `MockAgent` - Complete agent interface implementation
+- `MockClient` - Transport client with configurable responses
+- `MockProvider` - Provider with endpoint mapping
+- `MockModel` - Model with protocol support configuration
+- `MockCapability` - Capability with validation and processing
+
+**Quick Example**:
+```go
+package mypackage_test
+
+import (
+    "context"
+    "testing"
+
+    "github.com/JaimeStill/go-agents/pkg/agent"
+    "github.com/JaimeStill/go-agents/pkg/mock"
+    "github.com/JaimeStill/go-agents/pkg/protocols"
+)
+
+func TestMyOrchestrator(t *testing.T) {
+    // Create mock agent with predetermined response
+    mockAgent := mock.NewSimpleChatAgent(
+        "test-agent",
+        "Test response from mock agent",
+    )
+
+    // Use mock in your code
+    orchestrator := NewOrchestrator(mockAgent)
+    result, err := orchestrator.Process(context.Background(), "test input")
+
+    // Assert behavior
+    if err != nil {
+        t.Errorf("unexpected error: %v", err)
+    }
+    // ... additional assertions
+}
+```
+
+**Helper Constructors for Common Scenarios**:
+- `NewSimpleChatAgent(id, response)` - Basic chat responses
+- `NewStreamingChatAgent(id, chunks)` - Streaming chat
+- `NewToolsAgent(id, toolCalls)` - Tool calling
+- `NewEmbeddingsAgent(id, embedding)` - Embeddings generation
+- `NewMultiProtocolAgent(id)` - Multi-protocol support
+- `NewFailingAgent(id, err)` - Error handling testing
+
+See `pkg/mock` package documentation for complete API details.
 
 ### Viewing Documentation
 
@@ -823,6 +877,7 @@ go doc github.com/JaimeStill/go-agents/pkg/models
 go doc github.com/JaimeStill/go-agents/pkg/providers
 go doc github.com/JaimeStill/go-agents/pkg/transport
 go doc github.com/JaimeStill/go-agents/pkg/agent
+go doc github.com/JaimeStill/go-agents/pkg/mock
 ```
 
 **Start local documentation server:**
