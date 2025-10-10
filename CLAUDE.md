@@ -48,6 +48,40 @@ Context documents fall into two categories:
 - Purpose: Comprehensive, objective, factual summary of what was implemented, decisions made, and remaining challenges
 - Tone: Professional, clear, factual without conjecture or enthusiasm
 
+### CHANGELOG Format
+
+**CHANGELOG.md**: Version history tracking public API changes only.
+
+**Purpose**: Document library API changes for users to understand what's available in each version.
+
+**Format**:
+- Version heading: `## [vX.Y.Z] - YYYY-MM-DD`
+- Category headings: `**Added**:`, `**Changed**:`, `**Deprecated**:`, `**Removed**:`, `**Fixed**:`
+- Concise bullet points listing only public API changes
+- Focus on what's available, not why or how it was implemented
+
+**Include**:
+- New packages, types, functions, methods
+- Interface changes
+- New capability formats or providers
+- Breaking changes
+
+**Exclude**:
+- Implementation details
+- Internal refactoring
+- Documentation updates
+- Test additions
+- Bug fix details beyond API impact
+
+**Example**:
+```markdown
+## [v0.1.2] - 2025-10-10
+
+**Added**:
+- `pkg/mock` package providing mock implementations for testing
+- `MockAgent`, `MockClient`, `MockProvider` types
+```
+
 ### Documentation Tone and Style
 
 All documentation should be written in a clear, objective, and factual manner with professional tone. Focus on concrete implementation details and actual outcomes rather than speculative content or unfounded claims.

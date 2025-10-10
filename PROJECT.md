@@ -189,25 +189,49 @@ The pre-release phase continues until:
 
 ### Go Module Publishing
 
-**Publishing Process**:
+After merging the PR into main, follow these steps:
+
+1. Ensure Clean Repository State
+
 ```sh
-# Tag the release
+# Pull latest main
+git checkout main
+git pull origin main
+
+# Verify no uncommitted changes
+git status
+```
+
+2. Tag the Release
+
+```sh
+# Create and push the version tag
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-GitHub Release:
-- Navigate to https://github.com/JaimeStill/go-agents/releases/new
-- Select tag: v0.1.0
-- Title: "v0.1.0 - Initial Pre-Release"
-- Copy content from CHANGELOG.md into release notes
-- Check "Set as a pre-release"
-- Click "Publish release"
+3. Create GitHub Release
 
-Verify publication:
+  1. Navigate to https://github.com/JaimeStill/go-agents/releases/new
+  2. Select tag: `v0.1.0`
+  3. Title: `v0.1.0 - [Heading]`
+  4. Description: Copy from CHANGELOG.md
+  5. Check: "Set as a pre-release"
+  6. Click: "Publish release"
+
+4. Verify Publication
+
 ```sh
-# Go modules automatically index tagged versions
-# Consumers install with:
+# Verify the module is indexed (may take a few minutes)
+go list -m -versions github.com/JaimeStill/go-agents
+
+# Should show: v0.1.0 v0.1.0
+```
+
+5. Test Installation
+
+```sh
+# In a separate test directory
 go get github.com/JaimeStill/go-agents@v0.1.0
 ```
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.1.2] - 2025-10-10
+
+**Added**:
+- `pkg/mock` package providing mock implementations for testing
+- `MockAgent`, `MockClient`, `MockProvider`, `MockModel`, `MockCapability` types
+- Helper constructors: `NewSimpleChatAgent`, `NewStreamingChatAgent`, `NewToolsAgent`, `NewEmbeddingsAgent`, `NewMultiProtocolAgent`, `NewFailingAgent`
+
 ## [v0.1.1] - 2025-10-10
 
 **Added**:
