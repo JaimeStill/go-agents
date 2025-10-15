@@ -1,0 +1,472 @@
+# Document Classification POC
+
+## Project Overview
+
+The `classify-docs` tool is a proof-of-concept implementation that validates the document processing → agent analysis architecture. This tool serves dual purposes:
+
+1. **Immediate Value**: Classify security markings in DoD documents using go-agents vision capabilities
+2. **Architecture Validation**: Prototype design patterns for the future go-agents-document-context library
+
+### Key Principle
+
+This POC demonstrates that **traditional programming techniques (Go) should prepare and optimize contextual artifacts before intelligent processing by agents**. Document preprocessing is not optional—it's essential for handling documents that LLMs cannot process natively.
+
+## Problem Context
+
+### Azure OpenAI Vision API Limitations
+
+Unlike OpenAI's direct API, Azure OpenAI does **not** support native PDF input. Documents must be:
+1. Extracted page-by-page
+2. Converted to images (PNG or JPEG)
+3. Sent to vision API for analysis
+
+This limitation validates the need for robust document processing infrastructure in Go.
+
+### Classification Requirements
+
+DoD security classification analysis requires:
+- **Multi-classification handling**: Documents often contain multiple classification markings on the same page
+- **Comprehensive marking detection**: Banner markings, portion markings, header/footer markings
+- **Policy-based derivation**: Highest classification governs, with proper caveat handling
+- **Page-level granularity**: Independent analysis of each page with aggregated results
+
+### System Prompt Generation Requirements
+
+Generating classification system prompts from policy documents requires:
+- **Sequential context accumulation**: Build understanding progressively across document pages
+- **Manageable token usage**: Process one page at a time with accumulated context
+- **Progressive refinement**: Each page refines the system prompt based on new information
+- **Focused processing**: Small context windows where agents excel
+
+## Architecture Layers
+
+The tool is organized into three architectural layers that will inform go-agents-document-context design:
+
+### Layer 1: Document Processing Primitives (Reusable)
+
+**Purpose**: Low-level, format-agnostic document operations
+
+**Interfaces**:
+```go
+type Document interface {
+    PageCount() int
+    ExtractPage(pageNum int) (Page, error)
+    ExtractAllPages() ([]Page, error)
+    Close() error
+}
+
+type Page interface {
+    Number() int
+    ToImage(opts ImageOptions) ([]byte, error)  // For vision processing
+    Close() error
+}
+```
+
+**Implementation**:
+- PDF processing using `pdfcpu` (pure Go, no CGo)
+- Page extraction and image conversion
+- Resource cleanup and lifecycle management
+
+**Design Questions to Answer**:
+- Are these interfaces sufficient for real-world use?
+- What resource management patterns work best?
+- What's the performance profile of pdfcpu for this use case?
+
+### Layer 2: Processing Patterns (Orchestration)
+
+**Purpose**: Document processing workflows
+
+**Patterns**:
+
+**Parallel Processing**: Independent page analysis
+```go
+type ParallelProcessor struct {
+    Workers int  // Auto-detected: runtime.NumCPU() * 2, capped at 16
+}
+```
+- Pages processed concurrently
+- Results aggregated maintaining order
+- Fail-fast on errors
+- **Use Case**: Document classification (each page analyzed independently)
+
+**Sequential Processing**: Context accumulation
+```go
+type SequentialProcessor struct {
+    // Minimal configuration
+}
+```
+- Pages processed in order
+- Context accumulated across pages
+- Each page refines accumulated context
+- **Use Case**: System prompt generation (progressive understanding)
+
+**Key Insight**: The accumulated context from sequential processing **IS** the final deliverable. No separate synthesis step needed.
+
+**Design Questions to Answer**:
+- Does auto-detection of worker count work well?
+- How to handle partial failures gracefully?
+- What's the performance gain from parallelization?
+- Is context accumulation effective for prompt generation?
+
+### Layer 3: Use-Case Implementations (Application-Specific)
+
+**Purpose**: Domain-specific applications
+
+**Implementations**:
+- **System Prompt Generation**: Sequential processing with context accumulation
+- **Document Classification**: Parallel processing for independent page analysis
+
+**Design Questions to Answer**:
+- Can the same primitives serve both use cases effectively?
+- What additional abstractions are needed?
+- How to structure application-specific logic?
+
+## Supporting Infrastructure
+
+### Image Caching
+
+**Purpose**: Avoid reprocessing documents
+
+**Strategy**:
+- Cache key: Hash of (file path + modification time)
+- Structure: `<cache-dir>/<doc-hash>/page-NNN.png`
+- Validation: Compare source mod time vs cache time
+- Configuration: `--cache-dir` flag, `--no-cache` to disable
+
+**Benefits**:
+- Avoid re-extracting pages from PDFs
+- Reuse images across multiple operations
+- Significant performance improvement on repeated operations
+
+**Design Questions to Answer**:
+- Does caching provide meaningful performance improvement?
+- What's the appropriate cache eviction strategy?
+- Should cache be part of core library or application concern?
+
+### Configuration Management
+
+**Agent Configuration**: Based on `tools/prompt-agent/config.gpt-4o.json`
+- Vision capability with high detail
+- Azure OpenAI provider
+- API key injection via `--token` flag
+
+**Image Options**:
+- Format: PNG (lossless, higher quality) - configurable
+- DPI: 150 (balance quality/size) - configurable
+- Quality: N/A for PNG, 80-100 for JPEG
+
+## Phase Development Plan
+
+### Phase 1: Document Processing Primitives
+
+**Implementation Guide**: `phase-1-guide.md`
+
+**Objectives**:
+- Define core `Document` and `Page` interfaces
+- Implement PDF processing using pdfcpu
+- Implement page-to-image conversion (PNG)
+- Validate resource management patterns
+
+**Deliverables**:
+- `document/document.go` - Core interfaces and types
+- `document/pdf.go` - PDF implementation
+- Unit tests for page extraction and image conversion
+
+**Success Criteria**:
+- Successfully extract pages from multi-page PDF
+- Convert pages to PNG images with configurable DPI
+- Proper resource cleanup (no memory leaks)
+- Clean error handling and propagation
+
+### Phase 2: Processing Infrastructure
+
+**Implementation Guide**: `phase-2-guide.md` (future)
+
+**Objectives**:
+- Implement parallel processing with worker pools
+- Implement sequential processing with context accumulation
+- Auto-detect optimal worker count for parallel processing
+- Fail-fast error handling for parallel processing
+- Result aggregation maintaining page order
+
+**Deliverables**:
+- `processing/parallel.go` - Parallel processor implementation
+- `processing/sequential.go` - Sequential processor implementation
+- Unit tests validating both processing patterns
+
+**Success Criteria**:
+- **Parallel**: Process multiple pages concurrently with proper ordering
+- **Parallel**: Graceful worker pool lifecycle management
+- **Parallel**: Fail immediately on first error
+- **Sequential**: Process pages in order with context accumulation
+- **Sequential**: Each iteration receives previous context and returns updated context
+
+### Phase 3: Caching Infrastructure
+
+**Implementation Guide**: `phase-3-guide.md` (future)
+
+**Objectives**:
+- Implement file-based image caching
+- Cache key generation and validation
+- Cache hit/miss tracking
+- Configurable cache location
+
+**Deliverables**:
+- `cache/cache.go` - Cache implementation
+- Unit tests validating cache behavior
+
+**Success Criteria**:
+- Cache prevents redundant page processing
+- Proper cache invalidation on source changes
+- Measurable performance improvement on cache hits
+- Configurable and disableable
+
+### Phase 4: System Prompt Generation
+
+**Implementation Guide**: `phase-4-guide.md` (future)
+
+**Objectives**:
+- Process classification guide and policy PDFs sequentially
+- Use context accumulation to build system prompt progressively
+- Each page refines the system prompt with new information
+- Final accumulated context is the complete system prompt
+
+**Deliverables**:
+- `prompt.go` - Prompt generation logic using sequential processor
+- `system-prompt.txt` - Generated classification prompt
+- CLI subcommand: `generate-prompt`
+
+**Success Criteria**:
+- Successfully process policy documents page-by-page
+- Context accumulates correctly across pages
+- Final prompt captures: levels, formats, caveats, derivation rules, edge cases
+- Usable for classification tasks without further refinement
+
+**Workflow**:
+```
+Initial template → Page 1 → Updated v1 → Page 2 → Updated v2 → ... → Final prompt
+```
+
+### Phase 5: Classification Tool
+
+**Implementation Guide**: `phase-5-guide.md` (future)
+
+**Objectives**:
+- Implement CLI interface for document classification
+- Use parallel processor for independent page analysis
+- Implement classification result parsing and aggregation
+- JSON output with structured results
+
+**Deliverables**:
+- `main.go` - CLI implementation
+- `config.classification.json` - Agent configuration
+- CLI subcommand: `classify`
+- `README.md` - Usage documentation
+
+**Success Criteria**:
+- Process multi-page classified documents
+- Accurate page-level classification
+- Proper highest classification determination
+- Valid JSON output with rationale
+
+### Phase 6: Testing & Validation
+
+**Implementation Guide**: `phase-6-guide.md` (future)
+
+**Objectives**:
+- Test system prompt generation with guide and policy documents
+- Test classification with real 27-page classified document
+- Validate classification accuracy
+- Measure performance metrics
+- Document lessons learned
+
+**Deliverables**:
+- `system-prompt.txt` - Generated from policy documents
+- `classification-results.json` - Classification test results
+- Performance analysis document
+- Architecture recommendations for go-agents-document-context
+
+**Success Criteria**:
+- Generated system prompt is comprehensive and accurate
+- Classification results are accurate for sample documents
+- Acceptable performance (time, token usage)
+- Clear lessons learned documented
+- Validated architecture patterns for both processing patterns
+
+## Output Structure
+
+### Page Classification
+
+```json
+{
+  "page": 1,
+  "classification": "SECRET",
+  "confidence": "high",
+  "markings_found": [
+    "SECRET//NOFORN",
+    "(S)",
+    "(U)"
+  ],
+  "classification_rationale": "Page contains SECRET banner marking and multiple portion markings. Highest classification found is SECRET with NOFORN caveat. Overall page classification: SECRET per DoD Manual 5200.1."
+}
+```
+
+**Fields**:
+- `page`: Page number
+- `classification`: Overall page classification (UNCLASSIFIED, CONFIDENTIAL, SECRET, TOP SECRET)
+- `confidence`: Agent's confidence level (high, medium, low)
+- `markings_found`: **Unique** markings encountered on page
+- `classification_rationale`: Explanation of classification determination
+
+### Document Analysis
+
+```json
+{
+  "document_path": "/path/to/marked-documents.pdf",
+  "total_pages": 27,
+  "highest_classification": "SECRET",
+  "processing_time": "2m15s",
+  "page_results": [
+    { /* PageClassification */ },
+    { /* PageClassification */ }
+  ]
+}
+```
+
+**Fields**:
+- `document_path`: Source document path
+- `total_pages`: Total pages processed
+- `highest_classification`: Highest classification found across all pages
+- `processing_time`: Total processing duration
+- `page_results`: Array of per-page classifications
+
+## CLI Interface
+
+### Generate System Prompt
+
+```bash
+go run . generate-prompt \
+  --token $AZURE_API_KEY \
+  [--cache-dir ~/.cache/classify-docs] \
+  [--config config.classification.json]
+```
+
+**Note**: Guide and policy paths are configured in code or config file (in `_context/` directory)
+
+### Classify Document
+
+```bash
+go run . classify \
+  --token $AZURE_API_KEY \
+  --input /path/to/marked-documents.pdf \
+  --output classification-results.json \
+  [--cache-dir ~/.cache/classify-docs] \
+  [--config config.classification.json] \
+  [--workers 8] \
+  [--no-cache]
+```
+
+## Design Validation Goals
+
+This POC will answer critical questions for go-agents-document-context:
+
+### Interface Design
+- Are `Document`/`Page` interfaces sufficient?
+- What methods are missing or unnecessary?
+- How to handle format-specific features?
+
+### Resource Management
+- How to manage memory for large documents?
+- When to keep pages in memory vs. process incrementally?
+- What cleanup patterns work best?
+
+### Image Processing
+- PNG vs JPEG quality/size tradeoffs?
+- Optimal DPI for vision processing?
+- How to handle Azure's 20MB image size limit?
+
+### Processing Patterns
+- **Parallel**: What worker pool size is optimal?
+- **Parallel**: How to handle errors in parallel workflows?
+- **Parallel**: What's the performance benefit of parallelization?
+- **Sequential**: Does context accumulation work for prompt generation?
+- **Sequential**: What's the token usage profile across pages?
+- **Sequential**: How to structure the context update instructions?
+
+### Error Handling
+- Fail-fast vs. partial results?
+- Error recovery strategies?
+- How to provide actionable error messages?
+
+### Caching Strategy
+- Does caching provide meaningful value?
+- What should be cached (images, results, both)?
+- Cache eviction and invalidation strategies?
+
+## Success Criteria
+
+### Functional Requirements
+- ✅ Successfully process multi-page PDFs (up to 100 pages)
+- ✅ Extract pages and convert to images without quality loss
+- ✅ Generate comprehensive system prompt from policy documents using sequential processing
+- ✅ Classify documents with accurate page-level results using parallel processing
+- ✅ Properly determine highest overall classification
+- ✅ Handle multi-classification scenarios per DoD policy
+
+### Non-Functional Requirements
+- ✅ Clean, idiomatic Go code
+- ✅ Comprehensive error handling
+- ✅ Reasonable performance (< 5 seconds per page for classification)
+- ✅ Efficient resource usage (memory, API calls)
+- ✅ Configurable behavior (cache, workers, formats)
+
+### Architecture Validation
+- ✅ Interfaces are clean and extensible
+- ✅ Both processing patterns (parallel, sequential) are validated
+- ✅ Code organization supports library extraction
+- ✅ Lessons learned documented for go-agents-document-context
+
+## Future Library Extraction
+
+After POC completion, validated patterns will inform go-agents-document-context:
+
+### Core Library (`go-agents-document-context`)
+- Document/Page interfaces from `document/`
+- PDF processor implementation
+- Additional format processors (DOCX, XLSX, PPTX, images)
+- Both processing patterns (parallel, sequential)
+- Context optimization utilities
+- Caching infrastructure (if validated as valuable)
+
+### What Remains Application-Specific
+- Classification logic and prompts
+- System prompt generation instructions
+- Result aggregation and formatting
+- CLI interface and configuration
+- Domain-specific error handling
+
+### Open Questions for Library Design
+- Should caching be part of the library or application concern?
+- How to handle provider-specific constraints (Azure 20MB limit)?
+- What abstractions support both vision and text extraction use cases?
+- How to make format processors pluggable?
+- Should sequential processing be generalized beyond context strings?
+
+## References
+
+### External Dependencies
+- **pdfcpu**: PDF manipulation (https://github.com/pdfcpu/pdfcpu)
+- **go-agents**: Agent interface library (../../)
+
+### Related Documents
+- `../../PROJECT.md` - go-agents library roadmap
+- `../../ARCHITECTURE.md` - go-agents architecture
+- `phase-1-guide.md` - Document processing primitives implementation guide
+
+### Context Documents
+- `_context/security-classification-markings.pdf` - Classification guide
+- `_context/infosec-marking-dodm-5200-1.pdf` - DoD Manual 5200.1
+
+### Azure Documentation
+- Azure OpenAI Vision API: https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/gpt-with-vision
+- PDF Processing Sample: https://github.com/Azure-Samples/azure-openai-gpt-4-vision-pdf-extraction-sample
