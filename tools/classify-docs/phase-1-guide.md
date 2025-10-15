@@ -34,11 +34,21 @@ The interfaces defined here will inform the design of go-agents-document-context
 - Error handling and error wrapping
 - Basic image processing concepts (formats, DPI, encoding)
 
-### Dependencies
+### Module Setup
 
-Add to `go.mod`:
-```bash
-go get github.com/pdfcpu/pdfcpu
+This tool uses a nested Go module separate from the root go-agents library. This keeps the pdfcpu dependency isolated to the tool and maintains a lightweight go-agents library.
+
+Your `tools/classify-docs/go.mod` should look like:
+
+```go
+module github.com/JaimeStill/go-agents/tools/classify-docs
+
+go 1.25.2
+
+require (
+    github.com/JaimeStill/go-agents v0.1.2
+    github.com/pdfcpu/pdfcpu v0.11.0
+)
 ```
 
 **Why pdfcpu?**

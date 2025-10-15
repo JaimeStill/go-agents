@@ -1,0 +1,4 @@
+github.com/JaimeStill/go-agents v0.1.2 h1:FTSlTgywWLvp17i82DUhk/zoakMzHI3xki7ROsLb+NY=
+github.com/JaimeStill/go-agents v0.1.2/go.mod h1:Ui+Ea0YrnI37MbWXP7VxqX3IcIppkQRSO4/DEl4/4B4=
+github.com/pdfcpu/pdfcpu v0.11.0 h1:mL18Y3hSHzSezmnrzA21TqlayBOXuAx7BUzzZyroLGM=
+github.com/pdfcpu/pdfcpu v0.11.0/go.mod h1:F1ca4GIVFdPtmgvIdvXAycAm88noyNxZwzr9CpTy+Mw=
