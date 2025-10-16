@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/JaimeStill/go-agents/tools/classify-docs/document"
+	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/document"
 )
 
 func testPDFPath(t *testing.T) string {

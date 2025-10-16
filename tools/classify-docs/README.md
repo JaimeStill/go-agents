@@ -50,6 +50,51 @@ go mod download
 
 ## Available Tools
 
+### test-config - Configuration Verification
+
+Utility for verifying configuration loading and default value merging.
+
+#### Usage
+
+```bash
+go run ./cmd/test-config/main.go <config-file>
+```
+
+**Examples:**
+
+```bash
+# Verify Azure OpenAI config
+go run ./cmd/test-config/main.go config.classify-gpt4o-key.json
+
+# Verify Ollama config
+go run ./cmd/test-config/main.go config.classify-gemma.json
+```
+
+**Output:**
+```
+Configuration loaded successfully from: config.classify-gpt4o-key.json
+
+Agent Configuration:
+  Name: classify-agent-gpt4o
+  Provider: azure
+  Model: gpt-4o
+  Base URL: https://go-agents-platform.openai.azure.com/openai
+
+Processing Configuration (with defaults):
+  Parallel:
+    Worker Cap: 16 (default: 16)
+  Sequential:
+    Expose Intermediate Contexts: false (default: false)
+  Retry:
+    Max Attempts: 3 (default: 3)
+    Initial Backoff: 1s (default: 1s)
+    Max Backoff: 30s (default: 30s)
+    Backoff Multiplier: 2.0 (default: 2.0)
+  Cache:
+    Enabled: true (default: true)
+    Path: .cache/system-prompt.json (default: .cache/system-prompt.json)
+```
+
 ### test-render - PDF Rendering Verification
 
 Manual testing utility for validating PDF page rendering with configurable options.
@@ -158,28 +203,67 @@ Results in: `./pages/large-doc.1.png`, `./pages/large-doc.2.png`, etc.
 
 ## Testing
 
-Run the test suite:
+Run the complete test suite:
 
 ```bash
 cd tools/classify-docs
-go test ./tests/document/... -v
+go test ./tests/... -v
 ```
 
+**Test Packages:**
+- `tests/document/` - PDF processing and image conversion (7 tests)
+- `tests/config/` - Configuration loading and merging (4 tests)
+- `tests/cache/` - System prompt caching (4 tests)
+- `tests/retry/` - Retry logic and exponential backoff (6 tests)
+- `tests/processing/` - Parallel and sequential processors (12 tests)
+
+**Total: 33 tests, all passing**
+
 Tests automatically skip image conversion tests if ImageMagick is not available.
+
+**Run with coverage:**
+
+```bash
+go test ./tests/... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+```
 
 ## Development Status
 
 ### Phase 1: Complete ✅
 
-Document Processing Primitives - PDF extraction and image conversion infrastructure
+**Document Processing Primitives** - PDF extraction and image conversion infrastructure
 
-### Phase 2-6: Planned
+See: [01-document-processing-primitives.md](./_context/.archive/01-document-processing-primitives.md)
 
-- Processing patterns (parallel and sequential)
-- Caching infrastructure
-- System prompt generation
-- Document classification
-- Integration testing
+### Phase 2: Complete ✅
+
+**Processing Infrastructure** - Generic parallel and sequential processors with retry logic
+
+- Generic processing functions with type parameters
+- Parallel processor with worker pools
+- Sequential processor with context accumulation
+- Retry infrastructure with exponential backoff
+- Unified configuration management
+
+See: [02-processing-infrastructure.md](./_context/.archive/02-processing-infrastructure.md)
+
+### Phase 3: Complete ✅
+
+**Caching Infrastructure** - System prompt caching (merged into Phase 2)
+
+- JSON-based cache persistence
+- Metadata tracking (timestamp, reference documents)
+- Configuration integration
+
+See: [02-processing-infrastructure.md](./_context/.archive/02-processing-infrastructure.md)
+
+### Phases 4-6: Planned
+
+- **Phase 4**: System prompt generation using sequential processing
+- **Phase 5**: Document classification using parallel processing
+- **Phase 6**: Integration testing and validation
 
 See [PROJECT.md](./PROJECT.md) for complete roadmap and architecture details.
 
@@ -217,11 +301,24 @@ Error: failed to create output directory: permission denied
 
 The tool is organized into three layers:
 
-1. **Document Processing Primitives** - Low-level PDF operations and image conversion (Phase 1 - Complete)
-2. **Processing Patterns** - Parallel and sequential document workflows (Phase 2 - Planned)
+1. **Document Processing Primitives** - Low-level PDF operations and image conversion (Phase 1 - ✅ Complete)
+2. **Processing Patterns** - Parallel and sequential document workflows with retry logic (Phase 2 - ✅ Complete)
 3. **Use-Case Implementations** - Classification and prompt generation (Phases 4-5 - Planned)
 
-Supporting infrastructure includes image caching (Phase 3) and configuration management.
+Supporting infrastructure includes:
+- System prompt caching (Phase 3 - ✅ Complete)
+- Unified configuration management (Phase 2 - ✅ Complete)
+- Retry infrastructure with exponential backoff (Phase 2 - ✅ Complete)
+
+**Package Structure:**
+```
+pkg/
+├── config/        # Configuration types and loading
+├── retry/         # Retry logic with exponential backoff
+├── cache/         # System prompt caching
+├── document/      # PDF processing and image conversion
+└── processing/    # Parallel and sequential processors
+```
 
 See [PROJECT.md](./PROJECT.md) for detailed architecture documentation.
 
