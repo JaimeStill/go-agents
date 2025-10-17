@@ -16,9 +16,9 @@ type RetryConfig struct {
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxAttempts:       3,
-		InitialBackoff:    acfg.Duration(time.Second),
-		MaxBackoff:        acfg.Duration(30 * time.Second),
-		BackoffMultiplier: 2.0,
+		InitialBackoff:    acfg.Duration(13 * time.Second),
+		MaxBackoff:        acfg.Duration(50 * time.Second),
+		BackoffMultiplier: 1.2,
 	}
 }
 

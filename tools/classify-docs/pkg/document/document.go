@@ -1,11 +1,24 @@
 package document
 
+import "fmt"
+
 type ImageFormat string
 
 const (
 	PNG  ImageFormat = "png"
 	JPEG ImageFormat = "jpg"
 )
+
+func (f ImageFormat) MimeType() (string, error) {
+	switch f {
+	case PNG:
+		return "image/png", nil
+	case JPEG:
+		return "image/jpeg", nil
+	default:
+		return "", fmt.Errorf("unsupported image format: %s", f)
+	}
+}
 
 type ImageOptions struct {
 	Format  ImageFormat

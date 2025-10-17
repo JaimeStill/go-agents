@@ -154,7 +154,7 @@ func TestProcessWithContext_Progress(t *testing.T) {
 		func(ctx context.Context, page document.Page, prevContext string) (string, error) {
 			return prevContext, nil
 		},
-		func(completed, total int) {
+		func(completed, total int, context string) {
 			progressCalls++
 			lastCompleted = completed
 			lastTotal = total

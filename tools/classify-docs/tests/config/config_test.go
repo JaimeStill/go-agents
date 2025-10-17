@@ -18,12 +18,16 @@ func TestDefaultConfigs(t *testing.T) {
 			t.Errorf("expected MaxAttempts=3, got %d", cfg.MaxAttempts)
 		}
 
-		if cfg.InitialBackoff.ToDuration() != time.Second {
-			t.Errorf("expected InitialBackoff=1s, got %v", cfg.InitialBackoff.ToDuration())
+		if cfg.InitialBackoff.ToDuration() != 13*time.Second {
+			t.Errorf("expected InitialBackoff=13s, got %v", cfg.InitialBackoff.ToDuration())
 		}
 
-		if cfg.MaxBackoff.ToDuration() != 30*time.Second {
-			t.Errorf("expected MaxBackoff=30s, got %v", cfg.MaxBackoff.ToDuration())
+		if cfg.MaxBackoff.ToDuration() != 50*time.Second {
+			t.Errorf("expected MaxBackoff=50s, got %v", cfg.MaxBackoff.ToDuration())
+		}
+
+		if cfg.BackoffMultiplier != 1.2 {
+			t.Errorf("expected BackoffMultiplier=1.2, got %v", cfg.BackoffMultiplier)
 		}
 	})
 

@@ -9,7 +9,7 @@
           "name": "gemma3:4b",
           "capabilities": {
             "vision": {
-              "format": "ollama-vision",
+              "format": "openai-vision",
               "options": {
                 "temperature": 0.1
               }

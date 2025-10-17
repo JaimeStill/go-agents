@@ -50,6 +50,71 @@ go mod download
 
 ## Available Tools
 
+### generate-prompt - System Prompt Generation
+
+Generate classification system prompts from reference policy documents using sequential processing with context accumulation.
+
+#### Usage
+
+```bash
+go run ./cmd/generate-prompt/main.go [options]
+```
+
+**Flags:**
+- `--config` (default: "config.classify-gemma.json") - Path to agent configuration file
+- `--token` - API token (overrides token in config file)
+- `--references` (default: "_context") - Directory containing reference PDF documents
+- `--no-cache` - Disable cache usage (force regeneration)
+- `--timeout` (default: "30m") - Operation timeout
+
+#### Examples
+
+**Basic Usage - Generate with Default Config**
+
+```bash
+export AZURE_API_KEY="your-api-key"
+go run ./cmd/generate-prompt/main.go --token $AZURE_API_KEY
+```
+
+**Custom Configuration and References**
+
+```bash
+go run ./cmd/generate-prompt/main.go \
+  --config config.classify-gpt4o-key.json \
+  --token $AZURE_API_KEY \
+  --references _context \
+  --timeout 45m
+```
+
+**Force Regeneration (Ignore Cache)**
+
+```bash
+go run ./cmd/generate-prompt/main.go --token $AZURE_API_KEY --no-cache
+```
+
+**Output:**
+
+```
+Discovering reference documents...
+  Found: dodm-5200.01-enc4.pdf (9 pages)
+  Found: security-classification-markings.pdf (2 pages)
+
+Generating system prompt from 11 pages...
+  Page 1/11 processed
+  Page 2/11 processed
+  ...
+  Page 11/11 processed
+
+System prompt generated successfully!
+  Cached: .cache/system-prompt.json
+
+---
+[Generated system prompt content displayed to stdout]
+---
+```
+
+The generated system prompt is saved to `.cache/system-prompt.json` with metadata including timestamp and reference document list. The prompt content is also displayed to stdout for immediate review.
+
 ### test-config - Configuration Verification
 
 Utility for verifying configuration loading and default value merging.
@@ -216,8 +281,10 @@ go test ./tests/... -v
 - `tests/cache/` - System prompt caching (4 tests)
 - `tests/retry/` - Retry logic and exponential backoff (6 tests)
 - `tests/processing/` - Parallel and sequential processors (12 tests)
+- `tests/encoding/` - Base64 data URI image encoding (5 tests)
+- `tests/prompt/` - System prompt generation validation (3 tests)
 
-**Total: 33 tests, all passing**
+**Total: 45 tests, all passing**
 
 Tests automatically skip image conversion tests if ImageMagick is not available.
 
@@ -259,9 +326,21 @@ See: [02-processing-infrastructure.md](./_context/.archive/02-processing-infrast
 
 See: [02-processing-infrastructure.md](./_context/.archive/02-processing-infrastructure.md)
 
-### Phases 4-6: Planned
+### Phase 4: Complete ✅
 
-- **Phase 4**: System prompt generation using sequential processing
+**System Prompt Generation** - Sequential processing with context accumulation
+
+- Base64 data URI encoding for vision API
+- Sequential processor integration with vision agent
+- Progressive system prompt refinement across document pages
+- Retry infrastructure tuned for Azure rate limiting (13s initial backoff, 1.2 multiplier)
+- Generic progress reporting with result visibility
+- CLI tool for prompt generation
+
+See: [03-system-prompt-generation.md](./_context/.archive/03-system-prompt-generation.md)
+
+### Phases 5-6: Planned
+
 - **Phase 5**: Document classification using parallel processing
 - **Phase 6**: Integration testing and validation
 
@@ -303,12 +382,13 @@ The tool is organized into three layers:
 
 1. **Document Processing Primitives** - Low-level PDF operations and image conversion (Phase 1 - ✅ Complete)
 2. **Processing Patterns** - Parallel and sequential document workflows with retry logic (Phase 2 - ✅ Complete)
-3. **Use-Case Implementations** - Classification and prompt generation (Phases 4-5 - Planned)
+3. **Use-Case Implementations** - Classification and prompt generation (Phase 4 - ✅ Complete for prompt generation, Phase 5 - Planned for classification)
 
 Supporting infrastructure includes:
 - System prompt caching (Phase 3 - ✅ Complete)
 - Unified configuration management (Phase 2 - ✅ Complete)
 - Retry infrastructure with exponential backoff (Phase 2 - ✅ Complete)
+- Base64 data URI encoding for vision API (Phase 4 - ✅ Complete)
 
 **Package Structure:**
 ```
@@ -317,6 +397,8 @@ pkg/
 ├── retry/         # Retry logic with exponential backoff
 ├── cache/         # System prompt caching
 ├── document/      # PDF processing and image conversion
+├── encoding/      # Base64 data URI encoding for images
+├── prompt/        # System prompt generation
 └── processing/    # Parallel and sequential processors
 ```
 

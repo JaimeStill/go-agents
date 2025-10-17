@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/JaimeStill/go-agents/tools/classify-docs/document"
+	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/document"
 )
 
 func main() {

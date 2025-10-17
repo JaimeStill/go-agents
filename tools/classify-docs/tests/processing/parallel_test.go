@@ -152,7 +152,7 @@ func TestProcessPages_Progress(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			return page.Number(), nil
 		},
-		func(completed, total int) {
+		func(completed, total int, result int) {
 			progressCalls++
 			lastCompleted = completed
 			lastTotal = total

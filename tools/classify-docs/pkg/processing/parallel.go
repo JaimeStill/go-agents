@@ -15,7 +15,7 @@ func ProcessPages[T any](
 	cfg config.ParallelConfig,
 	pages []document.Page,
 	processor func(context.Context, document.Page) (T, error),
-	progress ProgressFunc,
+	progress ProgressFunc[T],
 ) ([]T, error) {
 	if len(pages) == 0 {
 		return []T{}, nil
@@ -98,7 +98,7 @@ func ProcessPages[T any](
 
 			completed++
 			if progress != nil {
-				progress(completed, len(pages))
+				progress(completed, len(pages), res.value)
 			}
 		}
 	}()

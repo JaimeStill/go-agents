@@ -1,3 +1,3 @@
 package processing
 
-type ProgressFunc func(completed, total int)
+type ProgressFunc[T any] func(completed, total int, result T)

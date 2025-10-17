@@ -25,7 +25,7 @@ func ProcessWithContext[TContext any](
 	pages []document.Page,
 	initial TContext,
 	processor ContextProcessor[TContext],
-	progress ProgressFunc,
+	progress ProgressFunc[TContext],
 ) (SequentialResult[TContext], error) {
 	var result SequentialResult[TContext]
 
@@ -59,7 +59,7 @@ func ProcessWithContext[TContext any](
 		}
 
 		if progress != nil {
-			progress(i+1, len(pages))
+			progress(i+1, len(pages), current)
 		}
 	}
 
