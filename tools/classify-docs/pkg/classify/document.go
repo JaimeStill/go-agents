@@ -149,11 +149,20 @@ CRITICAL RULES:
    - Write "TOP SECRET" not "TS"
 
 2. ALWAYS capture the COMPLETE marking string including ALL caveats:
+   - CRITICAL: Classification components are often SPATIALLY SEPARATED across the page
+   - Classification level may appear in one location while caveats appear elsewhere
+   - You MUST combine ALL components found anywhere on the page into one complete marking
    - Look for caveats after "//" separators (NOFORN, REL TO, ORCON, etc.)
    - Look for compartments after "//" (SPECAT, X1, X2, etc.)
    - Look for dates in YYYYMMDD format
-   - Example: If you see "SECRET" in header and "NOFORN" in footer, return "SECRET//NOFORN"
+   - Example: "SECRET" in header + "NOFORN" stamp elsewhere → return "SECRET//NOFORN"
    - Example: If you see "SECRET//NOFORN//X1", capture the ENTIRE string
+
+   SPECIAL EMPHASIS FOR FADED CAVEATS:
+   - NOFORN and ORCON stamps are FREQUENTLY faded or barely visible
+   - Low contrast does NOT mean invalid - these are legitimate classification components
+   - Apply maximum visual scrutiny to detect faint stamps anywhere on the page
+   - Examine ALL areas of the document carefully, not just prominent header/footer banners
 
 3. ONLY identify actual classification markings - NOT document content:
    - Banner markings at top/bottom of page (usually centered or in margins)
@@ -172,6 +181,10 @@ CRITICAL RULES:
    - Look for partially visible markings through redactions
    - Adjust for low-contrast markings - they are still valid
    - Build the complete classification from ALL components found (even faint ones)
+   - CRITICAL: If you see faint/faded text but cannot read it clearly, you MUST:
+     * Note the presence of unreadable faded marking in your rationale
+     * Assign MEDIUM or LOW confidence (never HIGH)
+     * State uncertainty about potential caveats in your rationale
 
 5. Update the classification field with the COMPLETE highest-level marking found
 6. Add each discovered marking component to markings_found (avoid duplicates)
@@ -180,36 +193,53 @@ CRITICAL RULES:
    Self-Check Questions:
    - "Is this text ACTUALLY a classification marking or could it be document content/heading?"
    - "Am I seeing markings in the EXPECTED locations (header/footer/margins)?"
-   - "Could there be FADED stamps or light markings I overlooked?"
-   - "Did I check BOTH header AND footer thoroughly?"
+   - "Did I check for SEPARATED components (classification in one place, caveats elsewhere)?"
+   - "Could there be FADED caveat stamps (NOFORN, ORCON) that I cannot detect at this resolution?"
+   - "Did I examine ALL areas of the page thoroughly, including low-contrast regions?"
    - "If I marked this UNCLASSIFIED, am I absolutely certain there are no markings?"
+   - "CRITICAL: If this document is SECRET/CONFIDENTIAL/TOP SECRET but I see NO caveats, could there be faded caveats I'm missing?"
 
-   If you answer NO or UNCERTAIN to any question, you MUST lower confidence.
+   If you answer NO or UNCERTAIN to any question, you MUST assign MEDIUM or LOW confidence.
 
-8. Assign confidence level using these criteria:
+8. Assign confidence level conservatively - it is BETTER to be uncertain than overconfident:
 
-   HIGH confidence when ALL of these are true:
-   - Clear, unambiguous classification markings are visible
-   - Markings are consistent across header/footer/margins
-   - No conflicting or questionable markings present
-   - All expected components are captured (level + caveats if present)
+   HIGH confidence ONLY when ALL of these are true:
+   - Classification markings are crystal clear with NO fading whatsoever
+   - ALL components are easily readable with perfect clarity
+   - No ambiguity exists about ANY part of the marking
+   - For classified documents: EITHER clear caveats are visible OR you have explicit proof no caveats exist
+   - You are absolutely certain no additional caveats could be present
+   - IMPORTANT: If you detected ANY faintness, you CANNOT assign HIGH confidence
+   - IMPORTANT: If document is SECRET/CONFIDENTIAL/TOP SECRET with no visible caveats, you CANNOT assign HIGH confidence
 
-   MEDIUM confidence when ANY of these are true:
-   - Markings are partially faded but still readable
-   - Some ambiguity in interpreting portions of the marking
-   - Missing expected caveats that might be present but unclear
-   - Inconsistent formatting but clear classification level
+   MEDIUM confidence when ANY of these are true (THIS IS THE EXPECTED DEFAULT):
+   - You detected any faintness, fading, or low-contrast markings
+   - Document shows SECRET/CONFIDENTIAL/TOP SECRET but NO caveats visible (caveats are common and may be faded)
+   - You see "SECRET" clearly but cannot rule out additional faded caveats
+   - Markings are readable but not perfectly clear
+   - You combined components from different locations
+   - Any self-check question raised doubt or uncertainty
+   - You searched for caveats but the quality makes you uncertain
+
+   IMPORTANT: Classified documents (SECRET, CONFIDENTIAL, TOP SECRET) often have caveats.
+   If you see ONLY the classification level with no caveats, assume MEDIUM confidence because
+   caveats may be present but too faded for you to detect.
 
    LOW confidence when ANY of these are true:
    - Markings are heavily faded or barely visible
-   - Unclear whether text is a classification marking or document content
+   - You cannot confidently read key components
    - Conflicting markings present
-   - Cannot determine if document is classified at all
+   - Unclear whether text is classification marking or document content
+
+   REMEMBER: MEDIUM confidence is valuable and acceptable. It flags documents for human review.
+   Being conservative protects against misclassification.
 
 9. Update rationale explaining:
    - What complete markings were found and their exact locations
    - Results of your self-check verification questions
    - Why the assigned confidence level is appropriate based on your verification
+   - If assigning HIGH confidence, explicitly confirm NO faintness was detected
+   - If you saw faint markings, explain why MEDIUM/LOW confidence was assigned
 
 Return ONLY the updated DocumentClassification as valid JSON.
 Do NOT wrap in markdown code fences.

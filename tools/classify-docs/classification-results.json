@@ -1,20 +1,244 @@
 [
   {
+    "file": "marked-documents_1.pdf",
+    "classification": "SECRET SPECAT",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET SPECAT"
+    ],
+    "classification_rationale": "Banner markings reading “SECRET SPECAT” were found clearly at the top center and bottom center of the page. No additional caveats (NOFORN, ORCON, REL TO, etc.) or portion markings were detected upon thorough inspection of headers, footers, and margins. All components of the marking are crisply printed with no fading or ambiguity. Self-check confirms these are classification markings (not document content), placement matches expected banner locations, and no faint or missing caveats are suspected. Therefore, HIGH confidence is appropriate."
+  },
+  {
+    "file": "marked-documents_10.pdf",
+    "classification": "SECRET//NOFORN//X1",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//NOFORN//X1"
+    ],
+    "classification_rationale": "Banner classification marking “SECRET//NOFORN//X1” was found clearly printed at the center top margin and repeated at the center bottom margin of the page. No other classification levels or caveats were observed, and the entire marking string is crisp and fully legible with no fading. Self‐check confirms this text is a standardized banner marking in expected locations, all components (classification, caveat, compartment) are unambiguous, and no faint or missing caveats remain. High confidence is appropriate due to the clarity and completeness of the marking."
+  },
+  {
+    "file": "marked-documents_11.pdf",
+    "classification": "SECRET//NOFORN//X1",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//NOFORN//X1"
+    ],
+    "classification_rationale": "Banner markings at the top-center and bottom-center of the page clearly show the complete string SECRET//NOFORN//X1. All components (classification level SECRET, caveat NOFORN, compartment X1) are perfectly legible with no fading or ambiguity. Self-check confirms markings are actual classification banners in expected header/footer locations, with no additional caveats missed. High confidence is justified because markings are crystal clear and fully readable."
+  },
+  {
+    "file": "marked-documents_12.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN"
+    ],
+    "classification_rationale": "Found three explicit blocks labeled 'CLASSIFICATION: SECRET' with adjacent 'CAVEATS: NOFORN' and 'TERMS: NONE'. No faint or ambiguous markings detected. Caveats are clearly visible, confirming 'NOFORN'. No additional caveats or compartments present. All marking components are crystal clear and fully legible, supporting HIGH confidence."
+  },
+  {
+    "file": "marked-documents_13.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN"
+    ],
+    "classification_rationale": "Banner-style classification notices appear twice on this page: under each redacted block the lines “CLASSIFICATION: SECRET” and “CAVEATS: NOFORN” are printed clearly with no fading or ambiguity. I confirmed there are no additional caveats or compartments elsewhere on the page, and the terminology “TERMS: NONE” is not part of the classification marking. All elements of the marking are fully legible and unambiguous, justifying HIGH confidence."
+  },
+  {
     "file": "marked-documents_14.pdf",
     "classification": "UNCLASSIFIED",
     "confidence": "HIGH",
+    "markings_found": [],
+    "classification_rationale": "No banner, header/footer, or portion classification markings (TOP SECRET, SECRET, CONFIDENTIAL, or CUI) were detected anywhere on the page. Faded or low-contrast caveats (NOFORN, ORCON, REL TO, etc.) were carefully searched for and none were found. All self-check questions confirm absence of any classification marking, supporting an UNCLASSIFIED determination with high confidence."
+  },
+  {
+    "file": "marked-documents_15.pdf",
+    "classification": "UNCLASSIFIED",
+    "confidence": "HIGH",
+    "markings_found": [],
+    "classification_rationale": "Exhaustive inspection of headers, footers, margins, and body reveals no visible classification banners, portion markings, or caveats. The large black rectangles are redactions of content, not classification text. No faint or faded classification stamps are present. Therefore the document is UNCLASSIFIED with high confidence."
+  },
+  {
+    "file": "marked-documents_16.pdf",
+    "classification": "SECRET//NOFORN//XI",
+    "confidence": "HIGH",
     "markings_found": [
-      "UNCLASSIFIED"
+      "SECRET//NOFORN//XI"
     ],
-    "classification_rationale": "No classification markings were found in the header, footer, margins, or body of the document. The document title 'SEQUENCE OF EVENTS' is not a classification marking. A thorough review of the page, including faint or faded markings, confirmed the absence of any classification indicators. Based on the absence of markings, the document is determined to be UNCLASSIFIED with high confidence."
+    "classification_rationale": "Banner markings at top center and bottom center of the page unambiguously read “SECRET//NOFORN//XI.” All components (classification level and caveats) are fully visible with no fading or ambiguity. No additional classification or caveat components were found elsewhere on the page. All self-check criteria are met with crystal-clear markings, justifying HIGH confidence."
+  },
+  {
+    "file": "marked-documents_17.pdf",
+    "classification": "SECRET",
+    "confidence": "MEDIUM",
+    "markings_found": [
+      "SECRET"
+    ],
+    "classification_rationale": "The page contains a clear red “SECRET” banner marking at the top center and a repeated red “SECRET” stamp at the bottom. No caveats (e.g., NOFORN, ORCON, REL TO) or compartments were detected anywhere on the page. Assigned MEDIUM confidence because although the classification level is unambiguous, the absence of any caveats could be due to faint or faded stamps that are not visible, preventing a HIGH confidence assessment."
+  },
+  {
+    "file": "marked-documents_18.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN"
+    ],
+    "classification_rationale": "Banner marking “SECRET NOFORN” is clearly visible at both the top center and bottom center of the page. The classification level (SECRET) and caveat (NOFORN) are unambiguous and no fading or additional caveats are present. All components are easily readable with no contrast issues, supporting a HIGH confidence assignment."
   },
   {
     "file": "marked-documents_19.pdf",
     "classification": "SECRET",
-    "confidence": "HIGH",
+    "confidence": "MEDIUM",
     "markings_found": [
       "SECRET"
     ],
-    "classification_rationale": "The classification marking 'SECRET' is clearly visible in the header and footer of the document. No conflicting or ambiguous markings were found. The marking is unambiguous and consistent across the page. Self-check verification confirms the classification level is accurate."
+    "classification_rationale": "A clear classification banner “SECRET” appears at the top center (header). No caveats (e.g., NOFORN, ORCON, REL TO) or compartment markings were found elsewhere on the page—even after examining margins, footers, and low‐contrast regions. Because classified documents commonly include caveats that may be faint or faded and none were visible, MEDIUM confidence is assigned."
+  },
+  {
+    "file": "marked-documents_2.pdf",
+    "classification": "UNCLASSIFIED",
+    "confidence": "HIGH",
+    "markings_found": [],
+    "classification_rationale": "A thorough review of the entire page—including headers, footers, margins, and content—revealed no classification banners, portion markings, caveats, or control stamps. There are no visible or faint words such as CONFIDENTIAL, SECRET, TOP SECRET, NOFORN, ORCON, or REL TO. All self-check questions confirm that no classification markings are present, supporting a determination of UNCLASSIFIED with HIGH confidence."
+  },
+  {
+    "file": "marked-documents_20.pdf",
+    "classification": "SECRET//NOFORN/WNINTEL",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN",
+      "WNINTEL"
+    ],
+    "classification_rationale": "Banner markings at top and bottom of the page clearly display SECRET, NOFORN, and WNINTEL. All components are perfectly readable with no fading or ambiguity, allowing unambiguous combination into the complete marking SECRET//NOFORN/WNINTEL. All self-check questions confirm clarity and correct placement, supporting a HIGH confidence assignment."
+  },
+  {
+    "file": "marked-documents_21.pdf",
+    "classification": "SECRET/NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET/NOFORN"
+    ],
+    "classification_rationale": "Banner portion marking “SECRET/NOFORN” appears clearly at the top center of the page and is repeated without fading at the bottom center. No additional caveats or compartments are present or faint. All components are fully legible with no ambiguity, supporting a HIGH confidence level."
+  },
+  {
+    "file": "marked-documents_22.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//NOFORN"
+    ],
+    "classification_rationale": "Banner markings reading “SECRET NOFORN” were found clearly at the top center and the bottom center of the page. These are banner classification markings (not document content) combining the classification level SECRET with the caveat NOFORN. No additional caveats, compartments, or faded markings are present or suspected. The markings are fully legible with no fading or ambiguity, supporting HIGH confidence."
+  },
+  {
+    "file": "marked-documents_23.pdf",
+    "classification": "SECRET",
+    "confidence": "MEDIUM",
+    "markings_found": [
+      "SECRET"
+    ],
+    "classification_rationale": "Header banner marking “SECRET” at top center and matching footer banner marking “SECRET” at bottom. No caveats or compartments (e.g., NOFORN, ORCON, REL TO) are visible anywhere on the page. The classification text is clear with no fading, but classified documents frequently include caveats that may be present but not detectable here. Self-check confirmed correct identification of banner markings and absence of visible caveats, warranting MEDIUM confidence."
+  },
+  {
+    "file": "marked-documents_24.pdf",
+    "classification": "CONFIDENTIAL",
+    "confidence": "MEDIUM",
+    "markings_found": [
+      "CONFIDENTIAL"
+    ],
+    "classification_rationale": "The banner marking “CONFIDENTIAL” appears clearly at the top center and is repeated at the bottom center of the page. No additional caveats or dissemination controls (e.g., NOFORN, ORCON, REL TO) are visible in headers, footers, margins, or body. All classification text is crisp and legible. Classified documents often include caveats that may be faint or missing, so MEDIUM confidence is assigned due to the possibility of undetected faint caveats."
+  },
+  {
+    "file": "marked-documents_25.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN"
+    ],
+    "classification_rationale": "Banner-style markings at the top and bottom of the page clearly show 'CLASSIFICATION: SECRET' and 'CAVEATS: NOFORN'. Both components are crisp and fully legible with no fading or ambiguity. No additional caveats or compartments detected. Self-check confirms markings are separate from content, consistently placed, and complete, justifying HIGH confidence."
+  },
+  {
+    "file": "marked-documents_26.pdf",
+    "classification": "SECRET//X1",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//X1"
+    ],
+    "classification_rationale": "A clear banner marking reading “SECRET//X1” appears at the top center and is repeated verbatim at the bottom center of the page. The compartment designator X1 is explicitly included, and there are no other caveats (such as NOFORN or REL TO) visible anywhere on the page. The markings are perfectly legible with no fading or ambiguity, and a thorough search of headers, footers, and margins found no additional components. All self-check criteria are satisfied, justifying HIGH confidence."
+  },
+  {
+    "file": "marked-documents_27.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "MEDIUM",
+    "markings_found": [
+      "SECRET",
+      "NOFORN"
+    ],
+    "classification_rationale": "Banner markings ‘SECRET’ are clearly present at both the top and bottom of the page. Adjacent to each ‘SECRET’ banner is a faint, low-contrast NOFORN stamp. Per spatial separation rules, these elements combine into the complete marking SECRET//NOFORN. The classification labels are in expected header/footer locations and are distinct from document content. The NOFORN caveat is visibly faded, so while the marking is readable, its fade introduces uncertainty that precludes HIGH confidence and warrants a MEDIUM confidence assignment."
+  },
+  {
+    "file": "marked-documents_3.pdf",
+    "classification": "SECRET//NOFORN//20280901",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//NOFORN//20280901"
+    ],
+    "classification_rationale": "The banner marking 'SECRET//NOFORN//20280901' appears clearly at both the top center and bottom center of the page with full legibility and no fading. No additional caveats beyond NOFORN and the declassification date were detected. The handling stamp 'EXPEDITE' is not a classification marking. Therefore, the complete document classification is 'SECRET//NOFORN//20280901' with HIGH confidence."
+  },
+  {
+    "file": "marked-documents_4.pdf",
+    "classification": "SECRET//NOFORN//20291001",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET",
+      "NOFORN",
+      "20291001"
+    ],
+    "classification_rationale": "Banner markings clearly visible in red at top center (‘SECRET//NOFORN//2029100’ truncated but confirmed by full marking at bottom center ‘SECRET//NOFORN//20291001’). Components SECRET (classification level), NOFORN (caveat), and 20291001 (date-time group) are all easily readable with no fading or ambiguity. Markings are in expected banner locations, and no additional caveats or compartments are present. All self-check questions confirm clarity; thus, HIGH confidence is appropriate."
+  },
+  {
+    "file": "marked-documents_5.pdf",
+    "classification": "UNCLASSIFIED",
+    "confidence": "HIGH",
+    "markings_found": [],
+    "classification_rationale": "Thorough inspection of the header, footer, margins, and body revealed no classification banners (TOP SECRET, SECRET, CONFIDENTIAL), caveats (NOFORN, ORCON, REL TO), portion markings, or CUI markings. The only visible elements are a date/time stamp, page number, and document title. Therefore, the document is UNCLASSIFIED with high confidence."
+  },
+  {
+    "file": "marked-documents_6.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET//NOFORN"
+    ],
+    "classification_rationale": "Banner marking 'SECRET//NOFORN' clearly visible at top-center and bottom-center of the page. Both the classification level and the caveat NOFORN are crystal clear with no fading or ambiguity. No additional caveats or conflicting markings detected, meeting all criteria for high confidence."
+  },
+  {
+    "file": "marked-documents_7.pdf",
+    "classification": "SECRET/NOFORN",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET/NOFORN"
+    ],
+    "classification_rationale": "The banner marking SECRET/NOFORN appears prominently at the top center of the page and is repeated at the bottom center. The text is crisp with no fading or low contrast. No additional caveats were detected elsewhere on the page. Self-check confirmed that this is a classification marking, located in expected header/footer positions, fully legible, and not part of the document content or headings. All components are clear and unambiguous, supporting a HIGH confidence assignment."
+  },
+  {
+    "file": "marked-documents_8.pdf",
+    "classification": "SECRET",
+    "confidence": "MEDIUM",
+    "markings_found": [
+      "SECRET"
+    ],
+    "classification_rationale": "Banner markings “SECRET” appear at the top center and bottom center of the page, indicating the overall classification as SECRET. No caveats (NOFORN, ORCON, REL TO, etc.) are visible in the header, footer, or margins after close inspection. Self-check confirms the text is a banner marking separate from document content. Because classified documents often include caveats that may be faded or absent, MEDIUM confidence is assigned."
+  },
+  {
+    "file": "marked-documents_9.pdf",
+    "classification": "UNCLASSIFIED",
+    "confidence": "HIGH",
+    "markings_found": [],
+    "classification_rationale": "No banner, header, footer, or portion classification markings detected anywhere on the page. A thorough inspection of all margins and low-contrast areas revealed no classification level or caveats. Confidently assigns UNCLASSIFIED with high confidence due to the clear absence of any classification markings."
   }
 ]

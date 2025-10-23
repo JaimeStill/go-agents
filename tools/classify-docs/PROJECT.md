@@ -273,27 +273,47 @@ type SequentialProcessor struct {
 Initial template → Page 1 → Updated v1 → Page 2 → Updated v2 → ... → Final prompt
 ```
 
-### Phase 5: Classification Tool
+### Phase 5: Document Classification ✅
 
-**Implementation Guide**: `phase-5-guide.md` (future)
+**Status**: Complete
+
+**Development Summary**: `_context/.archive/05-document-classification.md` (TBD)
 
 **Objectives**:
-- Implement CLI interface for document classification
-- Use parallel processor for independent page analysis
-- Implement classification result parsing and aggregation
-- JSON output with structured results
+- ✅ Implement per-page classification with context accumulation
+- ✅ Design comprehensive classification prompt with self-check verification
+- ✅ Implement conservative confidence scoring (HIGH/MEDIUM/LOW)
+- ✅ Handle spatially separated and faded classification components
+- ✅ Optimize for o4-mini visual reasoning model
+- ✅ Validate accuracy on 27-document test set
 
 **Deliverables**:
-- `main.go` - CLI implementation
-- `config.classification.json` - Agent configuration
-- CLI subcommand: `classify`
-- `README.md` - Usage documentation
+- ✅ `pkg/classify/document.go` - Classification logic with sequential processing
+- ✅ `pkg/classify/parse.go` - JSON response parsing
+- ✅ `cmd/classify/main.go` - CLI tool for document classification
+- ✅ `config.classify-o4-mini.json` - Optimized configuration (300 DPI, reasoning_effort: high)
+- ✅ `.cache/system-prompt.json` - Generated system prompt with spatial separation guidance
+- ✅ `classification-results.json` - Final test results (26/27 documents, 96.3% accuracy)
 
 **Success Criteria**:
-- Process multi-page classified documents
-- Accurate page-level classification
-- Proper highest classification determination
-- Valid JSON output with rationale
+- ✅ **Accuracy**: Achieved 96.3% accuracy (26/27 documents correct)
+- ✅ **Confidence Distribution**: 22 HIGH (81.5%), 5 MEDIUM (18.5%), 0 LOW
+- ✅ **Conservative Scoring**: Suspicion-based confidence for classified documents without visible caveats
+- ✅ **Faded Marking Detection**: Optimized settings (300 DPI, reasoning_effort: high) for low-contrast stamps
+- ✅ **JSON Output**: Structured results with classification, confidence, markings, and rationale
+- ✅ **Context Accumulation**: Sequential processing maintains state across pages
+
+**Key Implementation Details**:
+- Changed from planned parallel processing to sequential processing for better context accumulation
+- Conservative confidence logic: If SECRET/CONFIDENTIAL/TOP SECRET with no visible caveats, assign MEDIUM confidence (assumes potential fading)
+- Spatial separation handling: Combines classification components found anywhere on page (e.g., "SECRET" in header + "NOFORN" in footer)
+- Self-check verification: Model questions its findings before assigning confidence
+- Optimized for o4-mini: 300 DPI rendering + reasoning_effort: "high" parameter
+
+**Results Analysis**:
+- 1 classification error: Document 19 missing NOFORN caveat (correctly flagged with MEDIUM confidence)
+- 4 false-positive MEDIUM flags: Documents 17, 23, 8, 24 (legitimately no caveats, but flagged for review)
+- Trade-off accepted: Better to over-flag for human review than miss actual errors in security classification
 
 ### Phase 6: Testing & Validation
 
@@ -465,11 +485,18 @@ This POC will answer critical questions for go-agents-document-context:
 - ✅ CLI tool for system prompt generation
 - ✅ Comprehensive black-box tests (45 tests total, all passing)
 
-### Phases 5-6: Planned
-- Classify documents with accurate page-level results using parallel processing
-- Properly determine highest overall classification
-- Handle multi-classification scenarios per DoD policy
-- Document comprehensive lessons learned for go-agents-document-context
+### Phase 5: Complete ✅
+- ✅ Per-page document classification with sequential processing and context accumulation
+- ✅ Conservative confidence scoring with suspicion-based logic for missing caveats
+- ✅ Achieved 96.3% accuracy (26/27 documents) on test set
+- ✅ Optimized for o4-mini visual reasoning model (300 DPI, reasoning_effort: high)
+- ✅ Comprehensive classification prompt with self-check verification
+- ✅ Handles spatially separated and faded classification components
+
+### Phase 6: Planned
+- Comprehensive testing across different model configurations
+- Performance analysis and optimization recommendations
+- Document lessons learned for go-agents-document-context library design
 
 ## Future Library Extraction
 

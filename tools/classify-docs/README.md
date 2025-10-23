@@ -339,10 +339,22 @@ See: [02-processing-infrastructure.md](./_context/.archive/02-processing-infrast
 
 See: [03-system-prompt-generation.md](./_context/.archive/03-system-prompt-generation.md)
 
-### Phases 5-6: Planned
+### Phase 5: Complete ✅
 
-- **Phase 5**: Document classification using parallel processing
-- **Phase 6**: Integration testing and validation
+**Document Classification** - Sequential processing with conservative confidence scoring
+
+- Per-page classification with context accumulation
+- Comprehensive classification prompt with self-check verification
+- Conservative confidence scoring (HIGH/MEDIUM/LOW)
+- Suspicion-based confidence for documents with missing caveats
+- Optimized for o4-mini visual reasoning model
+- Achieved 96.3% accuracy (26/27 documents)
+
+See: Phase 5 development summary (TBD)
+
+### Phase 6: Planned
+
+- **Phase 6**: Comprehensive testing and validation across model configurations
 
 See [PROJECT.md](./PROJECT.md) for complete roadmap and architecture details.
 
