@@ -261,6 +261,96 @@ All documentation should be written in a clear, objective, and factual manner wi
 
 **Example**: `pkg/capabilities` defines `ModelInfo` interface with `Name()` and `Options()` methods that `pkg/models` implements, allowing capabilities to work with models without importing the models package.
 
+### Modern Go Idioms (Go 1.25.2+)
+**Principle**: Always engage a subagent to use Context7 MCP to verify code patterns align with the latest Go idioms and standard library best practices when planning code architecture.
+
+**Rationale**: Go evolves with each release, introducing new built-in functions (like `min`/`max` in 1.21), new standard library methods (like `sync.WaitGroup.Go()` in 1.25.0), and refined patterns. Using Context7 ensures implementation guides reflect modern, idiomatic Go code that leverages the latest language features for cleaner, more maintainable implementations.
+
+**Context7 MCP Usage**:
+
+**IMPORTANT**: Architectural validation should be performed by a subagent to preserve the main agent's context window. The comprehensive Go documentation (10,000 tokens) is significant and should not consume the main conversation's context.
+
+1. **Use subagent for architectural validation** (recommended approach):
+   ```
+   Task tool with subagent_type: "general-purpose"
+   Prompt: "Review the implementation guide at [path] and verify all code blocks against
+   Go 1.25.2 idioms using Context7 MCP. Retrieve the complete golang/go documentation
+   (10,000 tokens) and check for: modern concurrency patterns, proper error handling,
+   channel safety, context usage, and new stdlib methods. Return a summary of findings
+   with specific line numbers and recommendations."
+   ```
+   The subagent will consume the large documentation context and return only a concise summary of findings.
+
+2. **Get comprehensive Go documentation** (for subagent use):
+   ```
+   mcp__context7__get-library-docs
+   - context7CompatibleLibraryID: "/golang/go"
+   - tokens: 10000
+   ```
+   This retrieves the complete Go 1.25.2 standard library documentation covering all packages, patterns, and idioms.
+
+3. **Get focused topic documentation** (for specific questions in main conversation):
+   ```
+   mcp__context7__get-library-docs
+   - context7CompatibleLibraryID: "/golang/go"
+   - topic: "sync.WaitGroup concurrency channels context error handling"
+   - tokens: 8000
+   ```
+   This retrieves targeted documentation for specific areas like concurrency, error handling, or specific packages.
+
+4. **Verify patterns against standard library**:
+   - Compare implementation code against retrieved documentation
+   - Check for newer methods or functions that simplify code
+   - Ensure error handling follows current patterns
+   - Validate concurrency patterns match Go best practices
+
+**Implementation Checklist**:
+- [ ] Use Context7 MCP when creating implementation guides for Go code
+- [ ] Verify all concurrency patterns against current sync package documentation
+- [ ] Use built-in min/max for simple comparisons instead of custom functions
+- [ ] Leverage new standard library methods when available (WaitGroup.Go(), etc.)
+- [ ] Follow current error handling patterns (wrapping with %w, errors.Join for multiple errors)
+- [ ] Use direct context checks (`ctx.Err()`) instead of verbose select statements
+- [ ] Ensure channels are always closed using defer in sender goroutines
+
+**Go 1.25.2 Specific Patterns**:
+- `sync.WaitGroup.Go(func())` - Combines Add(1) + goroutine launch + implicit Done()
+- `for range n` - Integer range for simple iteration without index variable
+- Chained `min()`/`max()` - `min(min(a, b), c)` for multiple value comparison
+- `defer close(channel)` - Ensure channels always closed in sender goroutines
+- `ctx.Err()` - Direct context error checking instead of select with default
+- `errors.Join(...)` - Combine multiple errors into single error (Go 1.20+)
+
+**Example Modern Patterns**:
+```go
+// Modern Go 1.25.2 concurrency with WaitGroup.Go()
+var wg sync.WaitGroup
+workers := min(min(runtime.NumCPU()*2, maxWorkers), len(tasks))
+for range workers {
+    wg.Go(func() {
+        // Worker logic with implicit Done()
+    })
+}
+wg.Wait()
+
+// Modern channel sender with guaranteed closure
+go func() {
+    defer close(workCh)  // Always closes, even on early return
+    for item := range items {
+        select {
+        case workCh <- item:
+        case <-ctx.Done():
+            return
+        }
+    }
+}()
+
+// Modern context cancellation check
+if err := ctx.Err(); err != nil {
+    return fmt.Errorf("operation cancelled: %w", err)
+}
+```
+
 ## Testing Strategy and Conventions
 
 ### Test Organization Structure

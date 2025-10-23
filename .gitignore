@@ -1,3 +1,25 @@
-coverage.out
+# Build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
 *.test
+
+# Coverage files
+*.out
+coverage.html
 *.prof
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

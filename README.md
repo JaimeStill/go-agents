@@ -96,7 +96,7 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -104,7 +104,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "tools": {
-              "format": "openai-tools",
+              "format": "tools",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -179,7 +179,7 @@ go run tools/prompt-agent/main.go \
           "name": "o3-mini",
           "capabilities": {
             "chat": {
-              "format": "openai-reasoning",
+              "format": "o-chat",
               "options": {
                 "max_completion_tokens": 4096
               }
@@ -243,7 +243,7 @@ go run tools/prompt-agent/main.go \
           "name": "o3-mini",
           "capabilities": {
             "chat": {
-              "format": "openai-reasoning",
+              "format": "o-chat",
               "options": {
                 "max_completion_tokens": 4096
               }
@@ -302,7 +302,7 @@ go run tools/prompt-agent/main.go \
           "name": "gemma3:4b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -310,7 +310,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "vision": {
-              "format": "openai-vision",
+              "format": "vision",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -385,7 +385,7 @@ go run tools/prompt-agent/main.go \
           "name": "gemma3:4b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -393,7 +393,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "vision": {
-              "format": "openai-vision",
+              "format": "vision",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -461,7 +461,7 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -469,7 +469,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "tools": {
-              "format": "openai-tools",
+              "format": "tools",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -524,7 +524,7 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -532,7 +532,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "tools": {
-              "format": "openai-tools",
+              "format": "tools",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -587,7 +587,7 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "openai-chat",
+              "format": "chat",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -595,7 +595,7 @@ go run tools/prompt-agent/main.go \
               }
             },
             "tools": {
-              "format": "openai-tools",
+              "format": "tools",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
@@ -649,7 +649,7 @@ go run tools/prompt-agent/main.go \
           "name": "embeddinggemma:300m",
           "capabilities": {
             "embeddings": {
-              "format": "openai-embeddings",
+              "format": "embeddings",
               "options": {
                 "dimensions": 768
               }
@@ -700,7 +700,7 @@ Agent configurations use hierarchical JSON with transport-based structure:
         "name": "llama3.2:3b",
         "capabilities": {
           "chat": {
-            "format": "openai-chat",
+            "format": "chat",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -708,7 +708,7 @@ Agent configurations use hierarchical JSON with transport-based structure:
             }
           },
           "tools": {
-            "format": "openai-tools",
+            "format": "tools",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -741,7 +741,7 @@ For Azure AI Foundry with reasoning models:
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "openai-reasoning",
+            "format": "o-chat",
             "options": {
               "max_completion_tokens": 4096
             }

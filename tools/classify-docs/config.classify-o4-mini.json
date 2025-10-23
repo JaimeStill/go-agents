@@ -1,0 +1,28 @@
+{
+  "agent": {
+    "name": "classify-agent-o4mini",
+    "transport": {
+      "provider": {
+        "name": "azure",
+        "base_url": "https://go-agents-platform.openai.azure.com/openai",
+        "model": {
+          "name": "o4-mini",
+          "capabilities": {
+            "vision": {
+              "format": "o-vision",
+              "options": {
+                "detail": "high",
+                "reasoning_effort": "high"
+              }
+            }
+          }
+        },
+        "options": {
+          "deployment": "o4-mini",
+          "api_version": "2025-01-01-preview",
+          "auth_type": "api_key"
+        }
+      }
+    }
+  }
+}

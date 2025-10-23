@@ -50,28 +50,28 @@
 //
 // ChatCapability - Text-based conversation:
 //
-//	cap := capabilities.NewChatCapability("openai-chat", []CapabilityOption{
+//	cap := capabilities.NewChatCapability("chat", []CapabilityOption{
 //	    {Option: "temperature", Required: false, DefaultValue: 0.7},
 //	    {Option: "max_tokens", Required: false, DefaultValue: 4096},
 //	})
 //
 // VisionCapability - Image understanding with multimodal inputs:
 //
-//	cap := capabilities.NewVisionCapability("openai-vision", []CapabilityOption{
+//	cap := capabilities.NewVisionCapability("vision", []CapabilityOption{
 //	    {Option: "images", Required: true, DefaultValue: nil},
 //	    {Option: "detail", Required: false, DefaultValue: "auto"},
 //	})
 //
 // ToolsCapability - Function calling:
 //
-//	cap := capabilities.NewToolsCapability("openai-tools", []CapabilityOption{
+//	cap := capabilities.NewToolsCapability("tools", []CapabilityOption{
 //	    {Option: "tools", Required: true, DefaultValue: nil},
 //	    {Option: "tool_choice", Required: false, DefaultValue: "auto"},
 //	})
 //
 // EmbeddingsCapability - Text vectorization:
 //
-//	cap := capabilities.NewEmbeddingsCapability("openai-embeddings", []CapabilityOption{
+//	cap := capabilities.NewEmbeddingsCapability("embeddings", []CapabilityOption{
 //	    {Option: "input", Required: true, DefaultValue: nil},
 //	    {Option: "dimensions", Required: false, DefaultValue: nil},
 //	})
@@ -80,13 +80,13 @@
 //
 // Capabilities are registered by format name using a factory pattern:
 //
-//	capabilities.RegisterFormat("openai-chat", func() Capability {
-//	    return NewChatCapability("openai-chat", options)
+//	capabilities.RegisterFormat("chat", func() Capability {
+//	    return NewChatCapability("chat", options)
 //	})
 //
 // Retrieve capabilities from the registry:
 //
-//	cap, err := capabilities.GetFormat("openai-chat")
+//	cap, err := capabilities.GetFormat("chat")
 //	if err != nil {
 //	    // handle error
 //	}
@@ -100,7 +100,7 @@
 // Complete workflow for using a capability:
 //
 //	// Get capability from registry
-//	cap, err := capabilities.GetFormat("openai-chat")
+//	cap, err := capabilities.GetFormat("chat")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}

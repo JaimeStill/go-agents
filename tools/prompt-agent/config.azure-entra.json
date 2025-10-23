@@ -9,7 +9,7 @@
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "openai-reasoning",
+            "format": "o-chat",
             "options": {
               "max_completion_tokens": 4096
             }
