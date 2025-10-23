@@ -11,6 +11,27 @@ import (
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/processing"
 )
 
+// mockPage implements document.Page for testing
+type mockPage struct {
+	number int
+}
+
+func (m *mockPage) Number() int {
+	return m.number
+}
+
+func (m *mockPage) ToImage(opts document.ImageOptions) ([]byte, error) {
+	return []byte(fmt.Sprintf("image-%d", m.number)), nil
+}
+
+func createMockPages(count int) []document.Page {
+	pages := make([]document.Page, count)
+	for i := 0; i < count; i++ {
+		pages[i] = &mockPage{number: i + 1}
+	}
+	return pages
+}
+
 func TestProcessWithContext_Success(t *testing.T) {
 	cfg := config.DefaultSequentialConfig()
 	pages := createMockPages(5)

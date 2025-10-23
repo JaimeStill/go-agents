@@ -1,25 +1,24 @@
 {
   "agent": {
-    "name": "classify-agent-gpt4o",
+    "name": "classify-agent-o4mini",
     "transport": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
         "model": {
-          "name": "gpt-4o",
+          "name": "o4-mini",
           "capabilities": {
             "vision": {
-              "format": "vision",
+              "format": "o-vision",
               "options": {
-                "max_tokens": 4096,
-                "temperature": 0.1,
-                "detail": "high"
+                "detail": "high",
+                "reasoning_effort": "high"
               }
             }
           }
         },
         "options": {
-          "deployment": "gpt-4o",
+          "deployment": "o4-mini",
           "api_version": "2025-01-01-preview",
           "auth_type": "api_key"
         }

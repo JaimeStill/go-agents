@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/config"
@@ -40,8 +41,12 @@ func Do[T any](
 		lastErr = err
 
 		if attempt < cfg.MaxAttempts {
+			fmt.Fprintf(os.Stderr, "    [DEBUG] Waiting %v before retry %d...\n", backoff, attempt+1)
+			waitStart := time.Now()
 			select {
 			case <-time.After(backoff):
+				waited := time.Since(waitStart)
+				fmt.Fprintf(os.Stderr, "    [DEBUG] Waited %v, proceeding to retry %d\n", waited, attempt+1)
 				backoff = time.Duration(float64(backoff) * cfg.BackoffMultiplier)
 				maxBackoff := cfg.MaxBackoff.ToDuration()
 				if backoff > maxBackoff {

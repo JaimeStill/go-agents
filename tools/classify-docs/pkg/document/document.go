@@ -30,7 +30,7 @@ func DefaultImageOptions() ImageOptions {
 	return ImageOptions{
 		Format:  PNG,
 		Quality: 0,
-		DPI:     150,
+		DPI:     300,
 	}
 }
 

@@ -9,9 +9,10 @@
           "name": "gemma3:4b",
           "capabilities": {
             "vision": {
-              "format": "openai-vision",
+              "format": "vision",
               "options": {
-                "temperature": 0.1
+                "temperature": 0.1,
+                "detail": "high"
               }
             }
           }

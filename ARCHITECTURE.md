@@ -138,11 +138,16 @@ func GetFormat(name string) (Capability, error)
 ```
 
 **Registered Capability Formats**:
-- **openai-chat**: Standard OpenAI chat completions (supports temperature, top_p, etc.)
-- **openai-vision**: OpenAI vision with structured content
-- **openai-tools**: OpenAI function calling (non-streaming)
-- **openai-embeddings**: OpenAI embeddings generation
-- **openai-reasoning**: OpenAI reasoning models (restricted parameters, max_completion_tokens only)
+
+*Standard formats (OpenAI-compatible APIs):*
+- **chat**: Standard chat completions (supports temperature, top_p, etc.)
+- **vision**: Vision with structured content (images as multimodal inputs)
+- **tools**: Function calling (non-streaming)
+- **embeddings**: Text embedding generation
+
+*Model-family specific formats:*
+- **o-chat**: OpenAI o-series reasoning models (max_completion_tokens, reasoning_effort)
+- **o-vision**: OpenAI o-series vision reasoning (max_completion_tokens, reasoning_effort, images)
 
 **Option Management**: Each capability defines supported options with validation:
 ```go
@@ -347,7 +352,7 @@ ctx = context.WithValue(ctx, "agent_id", agent.ID())
         "name": "llama3.2:3b",
         "capabilities": {
           "chat": {
-            "format": "openai-chat",
+            "format": "chat",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -355,7 +360,7 @@ ctx = context.WithValue(ctx, "agent_id", agent.ID())
             }
           },
           "tools": {
-            "format": "openai-tools",
+            "format": "tools",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -392,11 +397,11 @@ Each protocol is configured independently with its own capability format and opt
 ```json
 "capabilities": {
   "chat": {
-    "format": "openai-chat",
+    "format": "chat",
     "options": {"temperature": 0.7, "top_p": 0.95}
   },
   "tools": {
-    "format": "openai-tools",
+    "format": "tools",
     "options": {"tool_choice": "auto"}
   }
 }
@@ -450,15 +455,15 @@ Agent returns typed response
 ### Capability-Protocol Flow
 
 ```
-Configuration: {"chat": {"format": "openai-chat", "options": {...}}}
+Configuration: {"chat": {"format": "chat", "options": {...}}}
   ↓
-Model creates ProtocolHandler(OpenAIChatCapability, options)
+Model creates ProtocolHandler(ChatCapability, options)
   ↓
 Request arrives with per-request options
   ↓
 Merged options = config options + request options
   ↓
-OpenAI Chat Capability formats to OpenAI API structure
+Chat Capability formats to OpenAI-compatible API structure
   ↓
 Ollama Provider routes to /v1/chat/completions endpoint
 ```
@@ -558,7 +563,7 @@ Models can compose capabilities from different formats:
   "name": "multi-capability-model",
   "capabilities": {
     "chat": {
-      "format": "openai-chat",
+      "format": "chat",
       "options": {"temperature": 0.7}
     },
     "tools": {
@@ -566,7 +571,7 @@ Models can compose capabilities from different formats:
       "options": {"execution_mode": "sandbox"}
     },
     "embeddings": {
-      "format": "openai-embeddings",
+      "format": "embeddings",
       "options": {"dimensions": 1536}
     }
   }

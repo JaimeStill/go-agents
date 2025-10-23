@@ -1,0 +1,20 @@
+[
+  {
+    "file": "marked-documents_14.pdf",
+    "classification": "UNCLASSIFIED",
+    "confidence": "HIGH",
+    "markings_found": [
+      "UNCLASSIFIED"
+    ],
+    "classification_rationale": "No classification markings were found in the header, footer, margins, or body of the document. The document title 'SEQUENCE OF EVENTS' is not a classification marking. A thorough review of the page, including faint or faded markings, confirmed the absence of any classification indicators. Based on the absence of markings, the document is determined to be UNCLASSIFIED with high confidence."
+  },
+  {
+    "file": "marked-documents_19.pdf",
+    "classification": "SECRET",
+    "confidence": "HIGH",
+    "markings_found": [
+      "SECRET"
+    ],
+    "classification_rationale": "The classification marking 'SECRET' is clearly visible in the header and footer of the document. No conflicting or ambiguous markings were found. The marking is unambiguous and consistent across the page. Self-check verification confirms the classification level is accurate."
+  }
+]

@@ -116,7 +116,7 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
         "name": "llama3.2:3b",
         "capabilities": {
           "chat": {
-            "format": "openai-chat",
+            "format": "chat",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -149,7 +149,7 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "openai-reasoning",
+            "format": "o-chat",
             "options": {
               "max_completion_tokens": 4096
             }
@@ -185,7 +185,7 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "openai-reasoning",
+            "format": "o-chat",
             "options": {
               "max_completion_tokens": 4096
             }
@@ -211,8 +211,8 @@ The configuration file follows the structure defined in `pkg/config/agent.go`:
 - Timeout values use human-readable duration strings ("24s", "1m", "2h")
 - Configuration follows hierarchical transport-based structure with composable capabilities
 - Protocol-specific parameters are in capability `options` map:
-  - **openai-chat**: Uses `max_tokens`, `temperature`, `top_p`
-  - **openai-reasoning**: Uses `max_completion_tokens` only (ignores temperature/top_p)
+  - **chat**: Standard chat format, uses `max_tokens`, `temperature`, `top_p`
+  - **o-chat**: OpenAI o-series reasoning format, uses `max_completion_tokens` and `reasoning_effort` (ignores temperature/top_p)
 - Provider-level options (like `deployment`, `api_version`, `auth_type`) are in provider `options`
 - Azure requires `/openai` path suffix in base_url
 - The `auth_type` option supports `"api_key"` or `"bearer"` for Azure provider

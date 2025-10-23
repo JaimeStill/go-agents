@@ -8,7 +8,7 @@
         "name": "embeddinggemma:300m",
         "capabilities": {
           "embeddings": {
-            "format": "openai-embeddings",
+            "format": "embeddings",
             "options": {
               "dimensions": 768
             }

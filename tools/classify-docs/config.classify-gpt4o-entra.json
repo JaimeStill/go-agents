@@ -9,7 +9,7 @@
           "name": "gpt-4o",
           "capabilities": {
             "vision": {
-              "format": "openai-vision",
+              "format": "vision",
               "options": {
                 "max_tokens": 4096,
                 "temperature": 0.1,

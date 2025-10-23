@@ -54,11 +54,15 @@ All core protocols are fully implemented and operational:
 
 The following capability formats are registered and functional:
 
-- ✅ **openai-chat**: Standard OpenAI chat completions (temperature, top_p, frequency_penalty, etc.)
-- ✅ **openai-vision**: Vision with structured content (images, PDFs, documents)
-- ✅ **openai-tools**: Function calling (tool definitions and call detection)
-- ✅ **openai-embeddings**: Text embedding generation
-- ✅ **openai-reasoning**: Reasoning models (o1, o3, etc.) with restricted parameters
+*Standard formats (OpenAI-compatible APIs):*
+- ✅ **chat**: Standard chat completions (temperature, top_p, frequency_penalty, etc.)
+- ✅ **vision**: Vision with structured content (images as multimodal inputs)
+- ✅ **tools**: Function calling (tool definitions and call detection)
+- ✅ **embeddings**: Text embedding generation
+
+*Model-family specific formats:*
+- ✅ **o-chat**: OpenAI o-series reasoning models (max_completion_tokens, reasoning_effort)
+- ✅ **o-vision**: OpenAI o-series vision reasoning (max_completion_tokens, reasoning_effort, images)
 
 ### Provider Integrations (Complete)
 

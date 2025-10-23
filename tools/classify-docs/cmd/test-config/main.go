@@ -28,8 +28,6 @@ func main() {
 	fmt.Printf("  Base URL: %s\n", cfg.Agent.Transport.Provider.BaseURL)
 
 	fmt.Printf("\nProcessing Configuration (with defaults):\n")
-	fmt.Printf("  Parallel:\n")
-	fmt.Printf("    Worker Cap: %d (default: 16)\n", cfg.Processing.Parallel.WorkerCap)
 	fmt.Printf("  Sequential:\n")
 	fmt.Printf("    Expose Intermediate Contexts: %v (default: false)\n", cfg.Processing.Sequential.ExposeIntermediateContexts)
 	fmt.Printf("  Retry:\n")

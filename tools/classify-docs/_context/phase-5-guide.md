@@ -169,11 +169,13 @@ Implement sequential page classification with context accumulation for a single 
 package classify
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/JaimeStill/go-agents/pkg/agent"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/config"
@@ -303,59 +305,59 @@ func createClassifier(
 	}
 }
 
-// buildClassificationPrompt constructs the user prompt for each page.
+const classificationPromptTemplate = `Current document classification state:
+
+{
+  "file": {{.File | printf "%q"}},
+  "classification": {{.Classification | printf "%q"}},
+  "confidence": {{.Confidence | printf "%q"}},
+  "markings_found": [{{range $i, $m := .MarkingsFound}}{{if $i}}, {{end}}{{$m | printf "%q"}}{{end}}],
+  "classification_rationale": {{.ClassificationRationale | printf "%q"}}
+}
+{{if not .Classification}}
+
+This is the first page - initialize the classification.
+{{end}}
+
+Analyze this page image and update the document classification:
+
+1. Add newly discovered markings to markings_found (avoid duplicates)
+2. Update classification to the highest level found across all pages so far
+3. Update confidence based on consistency and clarity of markings
+4. Update rationale with cumulative classification reasoning
+
+Return ONLY the updated DocumentClassification as valid JSON.
+Do NOT wrap in markdown code fences (though parser can handle it).
+Do NOT add conversational text - just the JSON object.`
+
+var promptTemplate *template.Template
+
+func init() {
+	promptTemplate = template.Must(template.New("classification").Parse(classificationPromptTemplate))
+}
+
+// buildClassificationPrompt constructs the user prompt for each page using a template.
 // Includes current classification state and instructs agent to update it.
 func buildClassificationPrompt(current DocumentClassification) string {
-	var builder strings.Builder
-
-	builder.WriteString("Current document classification state:\n\n")
-
-	// Show current state as JSON for agent to update
-	if current.Classification == "" {
-		builder.WriteString("{\n")
-		builder.WriteString(fmt.Sprintf("  \"file\": %q,\n", current.File))
-		builder.WriteString("  \"classification\": \"\",\n")
-		builder.WriteString("  \"confidence\": \"\",\n")
-		builder.WriteString("  \"markings_found\": [],\n")
-		builder.WriteString("  \"classification_rationale\": \"\"\n")
-		builder.WriteString("}\n\n")
-		builder.WriteString("This is the first page - initialize the classification.\n\n")
-	} else {
-		builder.WriteString("{\n")
-		builder.WriteString(fmt.Sprintf("  \"file\": %q,\n", current.File))
-		builder.WriteString(fmt.Sprintf("  \"classification\": %q,\n", current.Classification))
-		builder.WriteString(fmt.Sprintf("  \"confidence\": %q,\n", current.Confidence))
-		builder.WriteString("  \"markings_found\": [")
-		for i, marking := range current.MarkingsFound {
-			if i > 0 {
-				builder.WriteString(", ")
-			}
-			builder.WriteString(fmt.Sprintf("%q", marking))
-		}
-		builder.WriteString("],\n")
-		builder.WriteString(fmt.Sprintf("  \"classification_rationale\": %q\n", current.ClassificationRationale))
-		builder.WriteString("}\n\n")
+	var buf bytes.Buffer
+	if err := promptTemplate.Execute(&buf, current); err != nil {
+		// Fallback to simple prompt on template error
+		return "Analyze this page and provide classification as JSON."
 	}
 
-	builder.WriteString("Analyze this page image and update the document classification:\n\n")
-	builder.WriteString("1. Add newly discovered markings to markings_found (avoid duplicates)\n")
-	builder.WriteString("2. Update classification to the highest level found across all pages so far\n")
-	builder.WriteString("3. Update confidence based on consistency and clarity of markings\n")
-	builder.WriteString("4. Update rationale with cumulative classification reasoning\n\n")
-	builder.WriteString("Return ONLY the updated DocumentClassification as valid JSON.\n")
-	builder.WriteString("Do NOT wrap in markdown code fences (though parser can handle it).\n")
-	builder.WriteString("Do NOT add conversational text - just the JSON object.")
-
-	return builder.String()
+	return buf.String()
 }
 ```
 
 **Design Notes**:
 - Sequential processing mirrors Phase 4's prompt generation pattern
-- `buildClassificationPrompt()` shows current state and instructs agent to update
+- `text/template` approach makes prompt structure clear and maintainable
+- Template parsed once at initialization for efficiency
+- Prompt shows current state and instructs agent to update incrementally
 - Retry infrastructure handles Azure rate limiting
 - Progress reporting shows page numbers (full JSON output comes later)
 - Context cancellation checked before each page
+- Template fallback ensures graceful degradation on template errors
 
 **Testing Considerations**:
 - Mock agent responses with progressive classification updates
@@ -381,11 +383,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/JaimeStill/go-agents/pkg/agent"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/config"
-	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/document"
-	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/processing"
 )
 
 // Classify processes all PDF documents in a directory in parallel.
@@ -412,51 +413,70 @@ func Classify(
 
 	fmt.Fprintf(os.Stderr, "Processing %d documents...\n\n", len(pdfs))
 
-	// Convert PDF paths to document "pages" for parallel processing
-	type documentTask struct {
-		path string
+	// Parallel document processing
+	workers := min(cfg.Processing.Parallel.WorkerCap, len(pdfs))
+	workCh := make(chan string, len(pdfs))
+	resultCh := make(chan DocumentClassification, len(pdfs))
+	errCh := make(chan error, 1)
+
+	// Launch workers
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Go(func() {
+			for pdfPath := range workCh {
+				if ctx.Err() != nil {
+					return
+				}
+
+				result, err := ClassifyDocument(ctx, cfg, a, pdfPath)
+				if err != nil {
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
+				}
+
+				// Output full JSON for this document
+				outputDocumentResult(result)
+
+				resultCh <- result
+			}
+		})
 	}
 
-	tasks := make([]documentTask, len(pdfs))
-	for i, pdf := range pdfs {
-		tasks[i] = documentTask{path: pdf}
+	// Send work
+	go func() {
+		defer close(workCh)
+		for _, pdf := range pdfs {
+			select {
+			case workCh <- pdf:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Wait and close results
+	go func() {
+		wg.Wait()
+		close(resultCh)
+		close(errCh)
+	}()
+
+	// Collect results
+	var results []DocumentClassification
+	for result := range resultCh {
+		results = append(results, result)
 	}
 
-	// Process documents in parallel using ProcessPages
-	// Each "page" is actually a document that gets processed sequentially internally
-	results, err := processing.ProcessPages(
-		ctx,
-		cfg.Processing.Parallel,
-		convertToPages(tasks),
-		func(ctx context.Context, p document.Page) (DocumentClassification, error) {
-			// Extract document path from page interface
-			docPath := tasks[p.Number()-1].path
+	// Check for errors
+	if err := <-errCh; err != nil {
+		return nil, err
+	}
 
-			doc, err := document.OpenPDF(docPath)
-			if err != nil {
-				return DocumentClassification{}, fmt.Errorf("failed to open %s: %w", filepath.Base(docPath), err)
-			}
-			pageCount := doc.PageCount()
-			doc.Close()
-
-			fmt.Fprintf(os.Stderr, "Document: %s (%d pages)\n", filepath.Base(docPath), pageCount)
-
-			// Classify document sequentially
-			result, err := ClassifyDocument(ctx, cfg, a, docPath)
-			if err != nil {
-				return DocumentClassification{}, err
-			}
-
-			// Output full JSON for this document
-			outputDocumentResult(result)
-
-			return result, nil
-		},
-		nil, // No progress func at document level (handled within ClassifyDocument)
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify documents: %w", err)
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("classification cancelled: %w", ctx.Err())
 	}
 
 	return results, nil
@@ -488,29 +508,6 @@ func discoverPDFs(path string) ([]string, error) {
 	return pdfs, nil
 }
 
-// convertToPages converts document tasks to page interface for ProcessPages
-func convertToPages(tasks []struct{ path string }) []document.Page {
-	pages := make([]document.Page, len(tasks))
-	for i := range tasks {
-		pages[i] = &mockPage{number: i + 1}
-	}
-	return pages
-}
-
-// mockPage implements document.Page for parallel processing wrapper
-type mockPage struct {
-	number int
-}
-
-func (m *mockPage) Number() int {
-	return m.number
-}
-
-func (m *mockPage) ToImage(opts document.ImageOptions) ([]byte, error) {
-	// Not used - actual pages extracted within ClassifyDocument
-	return nil, fmt.Errorf("mockPage.ToImage should not be called")
-}
-
 // outputDocumentResult writes the document classification result to stderr
 func outputDocumentResult(result DocumentClassification) {
 	jsonBytes, err := json.MarshalIndent(result, "  ", "  ")
@@ -524,11 +521,15 @@ func outputDocumentResult(result DocumentClassification) {
 ```
 
 **Design Notes**:
-- Parallel processing at document level using existing `ProcessPages` infrastructure
+- Direct parallel processing at document level using worker pool pattern
+- Uses `sync.WaitGroup.Go()` for modern Go 1.25.2 concurrency
+- Worker pool size controlled by `cfg.Processing.Parallel.WorkerCap`
 - Each document is classified sequentially via `ClassifyDocument()`
-- Progress shows document name, page count, and per-page updates (via ClassifyDocument)
+- Buffered channels for work distribution and result collection
+- First error stops processing via `errCh` with single-item buffer
+- Context cancellation supported throughout the pipeline
 - Full JSON output per document to stderr after completion
-- Uses mockPage wrapper to integrate with ProcessPages (slight hack but pragmatic)
+- Progress updates handled within `ClassifyDocument()` (per-page)
 
 **Testing Considerations**:
 - Mock multiple documents with varying page counts

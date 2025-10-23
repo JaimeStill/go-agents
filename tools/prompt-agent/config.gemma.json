@@ -8,7 +8,7 @@
         "name": "gemma3:4b",
         "capabilities": {
           "chat": {
-            "format": "openai-chat",
+            "format": "chat",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
@@ -16,7 +16,7 @@
             }
           },
           "vision": {
-            "format": "openai-vision",
+            "format": "vision",
             "options": {
               "max_tokens": 4096,
               "temperature": 0.7,
