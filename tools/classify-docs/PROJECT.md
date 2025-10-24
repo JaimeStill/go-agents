@@ -315,29 +315,33 @@ Initial template → Page 1 → Updated v1 → Page 2 → Updated v2 → ... →
 - 4 false-positive MEDIUM flags: Documents 17, 23, 8, 24 (legitimately no caveats, but flagged for review)
 - Trade-off accepted: Better to over-flag for human review than miss actual errors in security classification
 
-### Phase 6: Testing & Validation
+### Phase 6: Testing & Validation ✅
 
-**Implementation Guide**: `phase-6-guide.md` (future)
+**Status**: Complete
+
+**Development Summary**: `_context/.archive/04-document-classification.md`
 
 **Objectives**:
-- Test system prompt generation with guide and policy documents
-- Test classification with real 27-page classified document
-- Validate classification accuracy
-- Measure performance metrics
-- Document lessons learned
+- ✅ Test system prompt generation with guide and policy documents
+- ✅ Test classification with 27-document test set
+- ✅ Validate classification accuracy
+- ✅ Measure performance metrics
+- ✅ Document lessons learned
 
-**Deliverables**:
-- `system-prompt.txt` - Generated from policy documents
-- `classification-results.json` - Classification test results
-- Performance analysis document
-- Architecture recommendations for go-agents-document-context
+**Results**:
+- ✅ Generated system prompt comprehensive and cached in `.cache/system-prompt.json`
+- ✅ Classification accuracy: 96.3% (26/27 documents correct)
+- ✅ Conservative confidence scoring successfully flags edge cases for human review
+- ✅ Performance acceptable: ~6-10 seconds per page with o4-mini
+- ✅ Lessons learned documented in Phase 5 development summary
+- ✅ Sequential processing pattern validated for both use cases
 
-**Success Criteria**:
-- Generated system prompt is comprehensive and accurate
-- Classification results are accurate for sample documents
-- Acceptable performance (time, token usage)
-- Clear lessons learned documented
-- Validated architecture patterns for both processing patterns
+**Success Criteria Met**:
+- ✅ Generated system prompt is comprehensive and accurate
+- ✅ Classification results achieve 96.3% accuracy on test set
+- ✅ Acceptable performance (6-10s per page, manageable token usage)
+- ✅ Clear lessons learned documented
+- ✅ Validated architecture patterns (sequential processing with context accumulation)
 
 ## Output Structure
 
@@ -498,31 +502,190 @@ This POC will answer critical questions for go-agents-document-context:
 - Performance analysis and optimization recommendations
 - Document lessons learned for go-agents-document-context library design
 
-## Future Library Extraction
+## Next Steps: Component Extraction
 
-After POC completion, validated patterns will inform go-agents-document-context:
+With the prototype validated (96.3% accuracy, 27-document test set), the next phase involves extracting reusable components into standardized libraries for broader use across document processing workflows.
 
-### Core Library (`go-agents-document-context`)
-- Document/Page interfaces from `document/`
-- PDF processor implementation
-- Additional format processors (DOCX, XLSX, PPTX, images)
-- Both processing patterns (parallel, sequential)
-- Context optimization utilities
-- Caching infrastructure (if validated as valuable)
+### Prompt Engineering Infrastructure
+
+**Goal**: Consolidate prompts into a standardized `pkg/prompts` package with `text/template` integration.
+
+**Components to Extract**:
+- System prompt generation templates (currently in `pkg/prompt/`)
+- Classification prompt templates (currently embedded in `pkg/classify/document.go`)
+- Self-check verification questions
+- Confidence scoring guidance
+
+**Organization Strategy**:
+- Organize by execution purpose (classification, system-prompt-generation, etc.)
+- Use `text/template` for parameterized prompt generation
+- Version control for prompt iterations
+- Single point of reference/update for all prompts
+
+**Benefits**:
+- Testable prompt templates
+- Clear separation of prompt content from execution logic
+- Easier prompt iteration and A/B testing
+- Standardized prompt management pattern
+
+**Target**: Extract pattern to go-agents for standardized prompt management
+
+### Document Processing Library
+
+**Goal**: Create standalone library for PDF processing and image conversion.
+
+**Components to Extract**:
+- `pkg/document/` primitives (Document/Page interfaces, PDF implementation)
+- ImageMagick integration for page rendering
+- Configurable image options (DPI, format, quality)
+- Resource lifecycle management
+
+**Future Extensions**:
+- Support for additional formats (DOCX, XLSX, PPTX, images)
+- Pluggable format processors
+- Text extraction capabilities
+- OCR integration
+
+**Design Considerations**:
+- Provider-specific constraints (e.g., Azure 20MB image limit)
+- Memory efficiency for large documents
+- Progressive page processing vs. batch loading
+- Format detection and auto-selection
+
+**Target**: New standalone document processing library
+
+### Parallel Processing Infrastructure
+
+**Goal**: Extract and preserve parallel processing pattern for future resilience improvements.
+
+**Components to Extract** (from git history commit d97ab1c^):
+
+**Core Implementation**:
+```go
+func ProcessPages[T any](
+    ctx context.Context,
+    cfg config.ParallelConfig,
+    pages []document.Page,
+    processor func(context.Context, document.Page) (T, error),
+    progress ProgressFunc,
+) ([]T, error)
+```
+
+**Configuration**:
+```go
+type ParallelConfig struct {
+    WorkerCap int  // Default: 16
+}
+```
+
+**Key Features**:
+- Worker pool with auto-detection (`min(runtime.NumCPU()*2, cfg.WorkerCap, len(pages))`)
+- Result ordering preserved through indexed result collection
+- Fail-fast error handling with context cancellation
+- Background result collection to prevent deadlocks
+- Modern Go 1.25.2 patterns (`sync.WaitGroup.Go()`, deferred channel closure)
+
+**Architecture Highlights**:
+- Three-channel pattern: work queue, result channel, done signal
+- Goroutines: N workers + work distributor + background result collector
+- Deadlock prevention: Result collector runs in background, drains all results
+- Context coordination: First error cancels context, stops all workers
+
+**Current Status**:
+- ✅ Architecture implemented and validated (Phase 2)
+- ✅ Comprehensive tests written and passing
+- ⚠️ Removed during Phase 5 due to Azure rate limiting
+- 🔄 Preserved in git history (commit d97ab1c^) for future extraction
+
+**Future Work**:
+- Make resilient to rate limiting through adaptive worker scaling
+- Implement backpressure mechanisms
+- Provider-specific rate limit detection and handling
+- Integration with retry infrastructure for resilience
+
+**Design Considerations**:
+- Dynamic worker pool scaling based on rate limit feedback
+- Graceful degradation (parallel → sequential on rate limit detection)
+- Per-provider rate limit configuration
+- Token bucket or similar rate limiting algorithms
+
+**Target**: https://github.com/JaimeStill/go-agents-orchestration
+
+### Sequential Processing Infrastructure
+
+**Goal**: Extract generic context accumulation pattern for broader use.
+
+**Components to Extract**:
+- `pkg/processing/sequential.go` implementation
+- Generic `ContextProcessor[T]` pattern
+- Progress reporting with intermediate result visibility
+- Context accumulation across processing stages
+
+**Generalization Strategy**:
+- Beyond document processing (applicable to any sequential workflow)
+- Support for streaming/incremental processing
+- Configurable context update strategies
+- Checkpoint and resume capabilities
+
+**Design Considerations**:
+- Memory management for large accumulated contexts
+- Context serialization for checkpointing
+- Error recovery and retry integration
+- Performance monitoring and metrics
+
+**Target**: https://github.com/JaimeStill/go-agents-orchestration
+
+### Retry Infrastructure
+
+**Goal**: Extract retry logic with exponential backoff and provider-specific strategies.
+
+**Components to Extract**:
+- `pkg/retry/` implementation with exponential backoff
+- Configurable retry parameters (max attempts, backoff multiplier, max backoff)
+- Non-retryable error marking
+- Provider-specific rate limit handling (e.g., Azure 429 responses)
+
+**Integration Points**:
+- Parallel processing for per-worker retry
+- Sequential processing for progressive backoff
+- Provider implementations for rate limit detection
+
+**Design Considerations**:
+- Provider-specific retry strategies (different providers have different rate limits)
+- Jitter for distributed systems
+- Circuit breaker patterns for sustained failures
+- Retry budget and quota management
+
+**Target**: https://github.com/JaimeStill/go-agents-orchestration
+
+### Configuration Patterns
+
+**Goal**: Document validated configuration patterns for broader adoption.
+
+**Patterns to Document**:
+- Pointer-based defaults for boolean configs (enables `true` defaults)
+- Optional vs required field handling
+- Default value merging strategies
+- Provider-specific vs generic configuration
+
+**Lessons Learned**:
+- Configuration should only exist during initialization
+- Transform configuration into domain objects at system boundaries
+- Avoid passing configuration through multiple layers
+- Validation at point of use, not in configuration package
+
+**Target**: Architecture documentation in go-agents repository
 
 ### What Remains Application-Specific
-- Classification logic and prompts
-- System prompt generation instructions
-- Result aggregation and formatting
-- CLI interface and configuration
-- Domain-specific error handling
 
-### Open Questions for Library Design
-- Should caching be part of the library or application concern?
-- How to handle provider-specific constraints (Azure 20MB limit)?
-- What abstractions support both vision and text extraction use cases?
-- How to make format processors pluggable?
-- Should sequential processing be generalized beyond context strings?
+The following components are domain-specific to classification and should remain in this prototype:
+
+- **Classification prompt content** (moves to consolidated `pkg/prompts/`)
+- **System prompt generation logic** (refactored to use consolidated prompts)
+- **CLI interface and tooling** (`main.go`, `cmd/test-*`)
+- **Domain-specific caching strategies** (`.cache/system-prompt.json`)
+- **Test dataset and ground truth** (`_context/marked-documents/`)
+- **Classification result schemas** (`DocumentClassification` struct)
 
 ## References
 

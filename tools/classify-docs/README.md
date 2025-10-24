@@ -7,8 +7,8 @@ A proof-of-concept tool for processing PDF documents and analyzing security clas
 The classify-docs tool demonstrates document processing → agent analysis architecture by:
 
 1. **Processing PDFs** - Extracting pages and converting to images for vision API consumption
-2. **Validating Patterns** - Testing both parallel (classification) and sequential (prompt generation) processing approaches
-3. **Informing Design** - Prototyping interfaces and patterns for go-agents-document-context library
+2. **Validating Patterns** - Testing sequential processing with context accumulation for both classification and prompt generation
+3. **Informing Design** - Prototyping interfaces and patterns for future document processing libraries
 
 ### Why This Tool?
 
@@ -39,60 +39,35 @@ brew install imagemagick
 magick -version
 ```
 
-**pdfcpu** - Installed automatically via Go modules
+## Commands
 
-## Installation
-
-```bash
-cd tools/classify-docs
-go mod download
-```
-
-## Available Tools
+The classify-docs tool provides two main commands integrated into `main.go`:
 
 ### generate-prompt - System Prompt Generation
 
 Generate classification system prompts from reference policy documents using sequential processing with context accumulation.
 
-#### Usage
+**Usage:**
 
 ```bash
-go run ./cmd/generate-prompt/main.go [options]
+go run . generate-prompt [options]
 ```
 
 **Flags:**
-- `--config` (default: "config.classify-gemma.json") - Path to agent configuration file
+- `--config` (default: "config.classify-gpt4o-key.json") - Path to agent configuration file
 - `--token` - API token (overrides token in config file)
 - `--references` (default: "_context") - Directory containing reference PDF documents
 - `--no-cache` - Disable cache usage (force regeneration)
 - `--timeout` (default: "30m") - Operation timeout
 
-#### Examples
-
-**Basic Usage - Generate with Default Config**
+**Example:**
 
 ```bash
 export AZURE_API_KEY="your-api-key"
-go run ./cmd/generate-prompt/main.go --token $AZURE_API_KEY
+go run . generate-prompt --token $AZURE_API_KEY
 ```
 
-**Custom Configuration and References**
-
-```bash
-go run ./cmd/generate-prompt/main.go \
-  --config config.classify-gpt4o-key.json \
-  --token $AZURE_API_KEY \
-  --references _context \
-  --timeout 45m
-```
-
-**Force Regeneration (Ignore Cache)**
-
-```bash
-go run ./cmd/generate-prompt/main.go --token $AZURE_API_KEY --no-cache
-```
-
-**Output:**
+**Sample Output:**
 
 ```
 Discovering reference documents...
@@ -109,162 +84,76 @@ System prompt generated successfully!
   Cached: .cache/system-prompt.json
 
 ---
-[Generated system prompt content displayed to stdout]
+[Generated system prompt content]
 ---
 ```
 
-The generated system prompt is saved to `.cache/system-prompt.json` with metadata including timestamp and reference document list. The prompt content is also displayed to stdout for immediate review.
+The generated system prompt is saved to `.cache/system-prompt.json` with metadata including timestamp and reference document list.
 
-### test-config - Configuration Verification
+### classify - Document Classification
 
-Utility for verifying configuration loading and default value merging.
+Classify security markings in PDF documents using the generated system prompt and vision capabilities.
 
-#### Usage
+**Usage:**
+
+```bash
+go run . classify [options]
+```
+
+**Flags:**
+- `--config` (default: "config.classify-o4-mini.json") - Path to agent configuration file
+- `--token` - API token (overrides token in config file)
+- `--input` - Directory containing PDF documents to classify
+- `--output` (default: "classification-results.json") - Output JSON file path
+- `--system-prompt` (default: ".cache/system-prompt.json") - Path to cached system prompt
+- `--timeout` (default: "15m") - Operation timeout
+
+**Example:**
+
+```bash
+go run . classify --token $AZURE_API_KEY --input _context/marked-documents
+```
+
+**Sample Output:**
+
+```json
+[
+  {
+    "file": "marked-documents_6.pdf",
+    "classification": "SECRET//NOFORN",
+    "confidence": "HIGH",
+    "markings_found": ["SECRET//NOFORN"],
+    "classification_rationale": "Banner marking 'SECRET//NOFORN' clearly visible..."
+  },
+  {
+    "file": "marked-documents_19.pdf",
+    "classification": "SECRET",
+    "confidence": "MEDIUM",
+    "markings_found": ["SECRET"],
+    "classification_rationale": "A clear classification banner 'SECRET' appears..."
+  }
+]
+```
+
+**Accuracy Note:** Currently achieves 96.3% accuracy (26/27 documents) on test set. Known limitation: Document 19 (marked-documents_19.pdf) - the model cannot consistently detect the faded NOFORN caveat stamp, resulting in classification as 'SECRET' instead of 'SECRET//NOFORN'. This is correctly flagged with MEDIUM confidence for human review.
+
+### Utility Tools
+
+**test-config** - Configuration verification utility:
 
 ```bash
 go run ./cmd/test-config/main.go <config-file>
 ```
 
-**Examples:**
-
-```bash
-# Verify Azure OpenAI config
-go run ./cmd/test-config/main.go config.classify-gpt4o-key.json
-
-# Verify Ollama config
-go run ./cmd/test-config/main.go config.classify-gemma.json
-```
-
-**Output:**
-```
-Configuration loaded successfully from: config.classify-gpt4o-key.json
-
-Agent Configuration:
-  Name: classify-agent-gpt4o
-  Provider: azure
-  Model: gpt-4o
-  Base URL: https://go-agents-platform.openai.azure.com/openai
-
-Processing Configuration (with defaults):
-  Parallel:
-    Worker Cap: 16 (default: 16)
-  Sequential:
-    Expose Intermediate Contexts: false (default: false)
-  Retry:
-    Max Attempts: 3 (default: 3)
-    Initial Backoff: 1s (default: 1s)
-    Max Backoff: 30s (default: 30s)
-    Backoff Multiplier: 2.0 (default: 2.0)
-  Cache:
-    Enabled: true (default: true)
-    Path: .cache/system-prompt.json (default: .cache/system-prompt.json)
-```
-
-### test-render - PDF Rendering Verification
-
-Manual testing utility for validating PDF page rendering with configurable options.
-
-#### Building
+**test-render** - PDF rendering verification utility:
 
 ```bash
 cd tools/classify-docs
 go build -o test-render ./cmd/test-render
-```
-
-#### Usage
-
-```bash
 ./test-render --input <pdf-path> [options]
 ```
 
-**Flags:**
-- `--input` (required) - Path to PDF file
-- `--page` (default: 1) - Page number to render (1-indexed)
-- `--output` (default: auto) - Output filename
-- `--path` (default: ".") - Output directory
-- `--format` (default: "png") - Image format (png or jpeg)
-- `--dpi` (default: 150) - Rendering DPI (72-600)
-- `--quality` (default: 85) - JPEG quality (1-100, ignored for PNG)
-
-#### Examples
-
-**Basic Usage - Render First Page**
-
-```bash
-./test-render --input _context/security-classification-markings.pdf
-```
-
-```
-Opening PDF: _context/security-classification-markings.pdf
-PDF has 2 pages
-Extracting page 1...
-Note: Images rendered with opaque white backgrounds (no transparency)
-Rendering page to png (DPI: 150)...
-
-Success!
-  Output: ./security-classification-markings.1.png
-  Size:   241399 bytes (235.74 KB)
-
-Open the image to verify rendering quality.
-```
-
-**Render Specific Page**
-
-```bash
-./test-render --input _context/security-classification-markings.pdf --page 2
-```
-
-**Test Different DPI Settings**
-
-```bash
-# Screen resolution (72 DPI)
-./test-render --input sample.pdf --dpi 72 --output test-72dpi.png
-
-# Balanced quality (150 DPI) - default
-./test-render --input sample.pdf --dpi 150 --output test-150dpi.png
-
-# Print quality (300 DPI)
-./test-render --input sample.pdf --dpi 300 --output test-300dpi.png
-```
-
-Compare the three images to see quality vs file size tradeoffs.
-
-**Compare PNG vs JPEG**
-
-```bash
-# PNG (lossless, larger files)
-./test-render --input sample.pdf --format png --output test.png
-
-# JPEG high quality
-./test-render --input sample.pdf --format jpeg --quality 95 --output test-high.jpg
-
-# JPEG medium quality
-./test-render --input sample.pdf --format jpeg --quality 85 --output test-medium.jpg
-
-# JPEG low quality
-./test-render --input sample.pdf --format jpeg --quality 60 --output test-low.jpg
-```
-
-Examine file sizes and visual quality to determine optimal settings.
-
-**Custom Output Location**
-
-```bash
-./test-render --input sample.pdf --output my-page.png --path ./output
-```
-
-Output: `./output/my-page.png`
-
-**Process Multiple Pages**
-
-```bash
-# Render pages 1-5
-for i in {1..5}; do
-  ./test-render --input large-doc.pdf --page $i --path ./pages
-done
-```
-
-Results in: `./pages/large-doc.1.png`, `./pages/large-doc.2.png`, etc.
+See source files for detailed usage information.
 
 ## Testing
 
@@ -350,11 +239,11 @@ See: [03-system-prompt-generation.md](./_context/.archive/03-system-prompt-gener
 - Optimized for o4-mini visual reasoning model
 - Achieved 96.3% accuracy (26/27 documents)
 
-See: Phase 5 development summary (TBD)
+See: [04-document-classification.md](./_context/.archive/04-document-classification.md)
 
-### Phase 6: Planned
+### Phase 6: Complete ✅
 
-- **Phase 6**: Comprehensive testing and validation across model configurations
+**Testing & Validation** - Validation completed through 27-document test set achieving 96.3% accuracy. Suspicion-based confidence scoring successfully flags edge cases for human review. Prototype validation complete, ready for component extraction.
 
 See [PROJECT.md](./PROJECT.md) for complete roadmap and architecture details.
 
@@ -393,8 +282,8 @@ Error: failed to create output directory: permission denied
 The tool is organized into three layers:
 
 1. **Document Processing Primitives** - Low-level PDF operations and image conversion (Phase 1 - ✅ Complete)
-2. **Processing Patterns** - Parallel and sequential document workflows with retry logic (Phase 2 - ✅ Complete)
-3. **Use-Case Implementations** - Classification and prompt generation (Phase 4 - ✅ Complete for prompt generation, Phase 5 - Planned for classification)
+2. **Processing Patterns** - Sequential document workflows with context accumulation and retry logic (Phase 2 - ✅ Complete)
+3. **Use-Case Implementations** - System prompt generation and document classification using sequential processing (Phases 4 & 5 - ✅ Complete)
 
 Supporting infrastructure includes:
 - System prompt caching (Phase 3 - ✅ Complete)
@@ -411,7 +300,8 @@ pkg/
 ├── document/      # PDF processing and image conversion
 ├── encoding/      # Base64 data URI encoding for images
 ├── prompt/        # System prompt generation
-└── processing/    # Parallel and sequential processors
+├── classify/      # Document classification logic
+└── processing/    # Sequential processor with context accumulation
 ```
 
 See [PROJECT.md](./PROJECT.md) for detailed architecture documentation.
