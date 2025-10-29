@@ -14,7 +14,6 @@ import (
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/document"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/encoding"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/processing"
-	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/retry"
 )
 
 func Generate(ctx context.Context, cfg config.ClassifyConfig, referencesPath string) (string, error) {
@@ -62,7 +61,7 @@ func Generate(ctx context.Context, cfg config.ClassifyConfig, referencesPath str
 		return "", fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	processor := createProcessor(a, cfg.Processing.Retry)
+	processor := createProcessor(a)
 	prompt := initialTemplate()
 
 	progressFunc := func(completed, total int, context string) {
@@ -203,7 +202,7 @@ The output should start immediately with the prompt content (e.g., "You are a do
 Do not wrap it, introduce it, or comment on it. Just the prompt itself.`
 }
 
-func createProcessor(a agent.Agent, retryCfg config.RetryConfig) processing.ContextProcessor[string] {
+func createProcessor(a agent.Agent) processing.ContextProcessor[string] {
 	return func(ctx context.Context, page document.Page, current string) (string, error) {
 		if err := ctx.Err(); err != nil {
 			return current, fmt.Errorf("context cancelled: %w", err)
@@ -225,33 +224,21 @@ func createProcessor(a agent.Agent, retryCfg config.RetryConfig) processing.Cont
 		promptBuilder.WriteString("\n\nAnalyze this page and update the system prompt accordingly.")
 		prompt := promptBuilder.String()
 
-		update, err := retry.Do(ctx, retryCfg, func(ctx context.Context, attempt int) (string, error) {
-			if attempt > 1 {
-				fmt.Fprintf(os.Stderr, "    Retry attempt %d for page %d...\n", attempt-1, page.Number())
-			}
-
-			response, err := a.Vision(ctx, prompt, []string{encoded})
-			if err != nil {
-				return "", err
-			}
-
-			if len(response.Choices) == 0 {
-				return "", fmt.Errorf("empty response for page %d", page.Number())
-			}
-
-			content := response.Content()
-			if strings.TrimSpace(content) == "" {
-				return "", fmt.Errorf("received empty context update for page %d", page.Number())
-			}
-
-			return content, nil
-		})
-
+		response, err := a.Vision(ctx, prompt, []string{encoded})
 		if err != nil {
 			return current, fmt.Errorf("vision request failed for page %d: %w", page.Number(), err)
 		}
 
-		return update, nil
+		if len(response.Choices) == 0 {
+			return current, fmt.Errorf("empty response for page %d", page.Number())
+		}
+
+		content := response.Content()
+		if strings.TrimSpace(content) == "" {
+			return current, fmt.Errorf("received empty context update for page %d", page.Number())
+		}
+
+		return content, nil
 	}
 }
 

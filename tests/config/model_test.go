@@ -12,17 +12,12 @@ func TestModelConfig_Unmarshal(t *testing.T) {
 		"name": "gpt-4",
 		"capabilities": {
 			"chat": {
-				"format": "openai-chat",
-				"options": {
-					"temperature": 0.7,
-					"max_tokens": 4096
-				}
+				"temperature": 0.7,
+				"max_tokens": 4096
 			},
 			"vision": {
-				"format": "openai-vision",
-				"options": {
-					"detail": "auto"
-				}
+				"detail": "auto",
+				"max_tokens": 2048
 			}
 		}
 	}`
@@ -44,28 +39,32 @@ func TestModelConfig_Unmarshal(t *testing.T) {
 	if !exists {
 		t.Fatal("chat capability not found")
 	}
-	if chatCap.Format != "openai-chat" {
-		t.Errorf("got format %s, want openai-chat", chatCap.Format)
-	}
 
-	temp, exists := chatCap.Options["temperature"]
+	temp, exists := chatCap["temperature"]
 	if !exists {
 		t.Fatal("temperature option not found")
 	}
 	if temp != 0.7 {
 		t.Errorf("got temperature %v, want 0.7", temp)
 	}
+
+	maxTokens, exists := chatCap["max_tokens"]
+	if !exists {
+		t.Fatal("max_tokens option not found")
+	}
+	// JSON numbers unmarshal as float64
+	if maxTokens != float64(4096) {
+		t.Errorf("got max_tokens %v, want 4096", maxTokens)
+	}
 }
 
 func TestModelConfig_Capabilities(t *testing.T) {
 	cfg := &config.ModelConfig{
 		Name: "test-model",
-		Capabilities: config.ModelCapabilities{
-			"chat": config.CapabilityConfig{
-				Format: "openai-chat",
-				Options: map[string]any{
-					"temperature": 0.7,
-				},
+		Capabilities: map[string]map[string]any{
+			"chat": {
+				"temperature": 0.7,
+				"max_tokens":  4096,
 			},
 		},
 	}
@@ -79,8 +78,12 @@ func TestModelConfig_Capabilities(t *testing.T) {
 		t.Fatal("chat capability not found")
 	}
 
-	if chatCap.Format != "openai-chat" {
-		t.Errorf("got format %s, want openai-chat", chatCap.Format)
+	temp, exists := chatCap["temperature"]
+	if !exists {
+		t.Fatal("temperature option not found")
+	}
+	if temp != 0.7 {
+		t.Errorf("got temperature %v, want 0.7", temp)
 	}
 }
 
@@ -123,27 +126,27 @@ func TestModelConfig_Merge(t *testing.T) {
 			name: "merge capabilities",
 			base: &config.ModelConfig{
 				Name: "test-model",
-				Capabilities: config.ModelCapabilities{
-					"chat": config.CapabilityConfig{
-						Format: "openai-chat",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.7,
 					},
 				},
 			},
 			source: &config.ModelConfig{
-				Capabilities: config.ModelCapabilities{
-					"vision": config.CapabilityConfig{
-						Format: "openai-vision",
+				Capabilities: map[string]map[string]any{
+					"vision": {
+						"detail": "auto",
 					},
 				},
 			},
 			expected: &config.ModelConfig{
 				Name: "test-model",
-				Capabilities: config.ModelCapabilities{
-					"chat": config.CapabilityConfig{
-						Format: "openai-chat",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.7,
 					},
-					"vision": config.CapabilityConfig{
-						Format: "openai-vision",
+					"vision": {
+						"detail": "auto",
 					},
 				},
 			},
@@ -166,17 +169,45 @@ func TestModelConfig_Merge(t *testing.T) {
 				Name: "test-model",
 			},
 			source: &config.ModelConfig{
-				Capabilities: config.ModelCapabilities{
-					"chat": config.CapabilityConfig{
-						Format: "openai-chat",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.7,
 					},
 				},
 			},
 			expected: &config.ModelConfig{
 				Name: "test-model",
-				Capabilities: config.ModelCapabilities{
-					"chat": config.CapabilityConfig{
-						Format: "openai-chat",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.7,
+					},
+				},
+			},
+		},
+		{
+			name: "merge overlapping protocol options",
+			base: &config.ModelConfig{
+				Name: "test-model",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.7,
+						"max_tokens":  4096,
+					},
+				},
+			},
+			source: &config.ModelConfig{
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.9,
+					},
+				},
+			},
+			expected: &config.ModelConfig{
+				Name: "test-model",
+				Capabilities: map[string]map[string]any{
+					"chat": {
+						"temperature": 0.9,
+						"max_tokens":  4096,
 					},
 				},
 			},
@@ -195,14 +226,22 @@ func TestModelConfig_Merge(t *testing.T) {
 				t.Errorf("got %d capabilities, want %d", len(tt.base.Capabilities), len(tt.expected.Capabilities))
 			}
 
-			for key, expectedCap := range tt.expected.Capabilities {
-				baseCap, exists := tt.base.Capabilities[key]
+			for protocol, expectedOpts := range tt.expected.Capabilities {
+				baseOpts, exists := tt.base.Capabilities[protocol]
 				if !exists {
-					t.Errorf("capability %s missing from result", key)
+					t.Errorf("protocol %s missing from result", protocol)
 					continue
 				}
-				if baseCap.Format != expectedCap.Format {
-					t.Errorf("capability %s: got format %s, want %s", key, baseCap.Format, expectedCap.Format)
+
+				for key, expectedVal := range expectedOpts {
+					baseVal, exists := baseOpts[key]
+					if !exists {
+						t.Errorf("protocol %s: option %s missing", protocol, key)
+						continue
+					}
+					if baseVal != expectedVal {
+						t.Errorf("protocol %s: option %s got %v, want %v", protocol, key, baseVal, expectedVal)
+					}
 				}
 			}
 		})

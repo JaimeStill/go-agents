@@ -8,21 +8,17 @@
 //
 // MockAgent: Implements agent.Agent interface with configurable protocol responses
 //
-// MockClient: Implements transport.Client interface for transport layer testing
+// MockClient: Implements client.Client interface for client layer testing
 //
 // MockProvider: Implements providers.Provider interface with endpoint mapping
-//
-// MockModel: Implements models.Model interface with protocol support configuration
-//
-// MockCapability: Implements capabilities.Capability interface for format testing
 //
 // # Usage Example
 //
 //	// Create a mock agent with predetermined chat response
 //	mockAgent := mock.NewMockAgent(
-//	    mock.WithChatResponse(&protocols.ChatResponse{
-//	        Choices: []struct{ Message protocols.Message }{
-//	            {Message: protocols.NewMessage("assistant", "Test response")},
+//	    mock.WithChatResponse(&types.ChatResponse{
+//	        Choices: []struct{ Message types.Message }{
+//	            {Message: types.NewMessage("assistant", "Test response")},
 //	        },
 //	    }),
 //	)
@@ -37,7 +33,7 @@
 // with test chunks:
 //
 //	mockAgent := mock.NewMockAgent(
-//	    mock.WithStreamChunks([]protocols.StreamingChunk{
+//	    mock.WithStreamChunks([]types.StreamingChunk{
 //	        {Content: "chunk1"},
 //	        {Content: "chunk2"},
 //	    }),

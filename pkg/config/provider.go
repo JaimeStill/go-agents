@@ -1,5 +1,7 @@
 package config
 
+import "maps"
+
 // ProviderConfig defines the configuration for an LLM provider.
 // It includes the provider name, base URL, model configuration, and
 // provider-specific options (e.g., deployment, API version, authentication type).
@@ -40,6 +42,9 @@ func (c *ProviderConfig) Merge(source *ProviderConfig) {
 	}
 
 	if source.Options != nil {
-		c.Options = MergeOptions(c.Options, source.Options)
+		if c.Options == nil {
+			c.Options = make(map[string]any)
+		}
+		maps.Copy(c.Options, source.Options)
 	}
 }

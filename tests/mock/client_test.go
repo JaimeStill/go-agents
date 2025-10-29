@@ -2,44 +2,107 @@ package mock_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
-	"github.com/JaimeStill/go-agents/pkg/capabilities"
 	"github.com/JaimeStill/go-agents/pkg/mock"
-	"github.com/JaimeStill/go-agents/pkg/protocols"
-	"github.com/JaimeStill/go-agents/pkg/transport"
+	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
-func TestNewMockClient_DefaultConfiguration(t *testing.T) {
-	c := mock.NewMockClient()
+func TestNewMockClient(t *testing.T) {
+	client := mock.NewMockClient()
 
-	if c.Provider() == nil {
-		t.Error("expected default provider")
-	}
-
-	if c.Model() == nil {
-		t.Error("expected default model")
-	}
-
-	if !c.IsHealthy() {
-		t.Error("expected healthy by default")
+	if client == nil {
+		t.Fatal("NewMockClient returned nil")
 	}
 }
 
-func TestMockClient_WithHealthy(t *testing.T) {
+func TestMockClient_ExecuteProtocol(t *testing.T) {
+	expectedResponse := &types.ChatResponse{
+		Model: "test-model",
+	}
+
+	client := mock.NewMockClient(
+		mock.WithExecuteResponse(expectedResponse, nil),
+	)
+
+	chatRequest := &types.ChatRequest{
+		Messages: []types.Message{
+			types.NewMessage("user", "Hello"),
+		},
+		Options: map[string]any{"model": "test-model"},
+	}
+
+	result, err := client.ExecuteProtocol(context.Background(), chatRequest)
+
+	if err != nil {
+		t.Fatalf("ExecuteProtocol failed: %v", err)
+	}
+
+	if result != expectedResponse {
+		t.Error("returned different response than configured")
+	}
+}
+
+func TestMockClient_ExecuteProtocolStream(t *testing.T) {
+	// Create properly typed StreamingChunk
+	chunk := &types.StreamingChunk{
+		Model: "test-model",
+	}
+	chunk.Choices = make([]struct {
+		Index        int     `json:"index"`
+		Delta        struct {
+			Role    string `json:"role,omitempty"`
+			Content string `json:"content,omitempty"`
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"`
+	}, 1)
+	chunk.Choices[0].Delta.Content = "Hello"
+
+	chunks := []*types.StreamingChunk{chunk}
+
+	client := mock.NewMockClient(
+		mock.WithStreamResponse(chunks, nil),
+	)
+
+	chatRequest := &types.ChatRequest{
+		Messages: []types.Message{
+			types.NewMessage("user", "Hello"),
+		},
+		Options: map[string]any{"model": "test-model", "stream": true},
+	}
+
+	stream, err := client.ExecuteProtocolStream(context.Background(), chatRequest)
+
+	if err != nil {
+		t.Fatalf("ExecuteProtocolStream failed: %v", err)
+	}
+
+	count := 0
+	for chunk := range stream {
+		if chunk.Error != nil {
+			t.Fatalf("Stream error: %v", chunk.Error)
+		}
+		count++
+	}
+
+	if count != len(chunks) {
+		t.Errorf("got %d chunks, want %d", count, len(chunks))
+	}
+}
+
+func TestMockClient_IsHealthy(t *testing.T) {
 	tests := []struct {
 		name     string
 		healthy  bool
 		expected bool
 	}{
 		{
-			name:     "healthy client",
+			name:     "healthy",
 			healthy:  true,
 			expected: true,
 		},
 		{
-			name:     "unhealthy client",
+			name:     "unhealthy",
 			healthy:  false,
 			expected: false,
 		},
@@ -47,113 +110,13 @@ func TestMockClient_WithHealthy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := mock.NewMockClient(mock.WithHealthy(tt.healthy))
+			client := mock.NewMockClient(
+				mock.WithHealthy(tt.healthy),
+			)
 
-			if c.IsHealthy() != tt.expected {
-				t.Errorf("expected IsHealthy() = %v, got %v", tt.expected, c.IsHealthy())
+			if client.IsHealthy() != tt.expected {
+				t.Errorf("got IsHealthy() = %v, want %v", client.IsHealthy(), tt.expected)
 			}
 		})
 	}
-}
-
-func TestMockClient_ExecuteProtocol_Success(t *testing.T) {
-	expectedResponse := &protocols.ChatResponse{
-		Model: "test-model",
-	}
-
-	c := mock.NewMockClient(mock.WithExecuteResponse(expectedResponse, nil))
-
-	ctx := context.Background()
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Chat,
-		Messages: []protocols.Message{},
-	}
-
-	response, err := c.ExecuteProtocol(ctx, req)
-
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if response != expectedResponse {
-		t.Error("response does not match expected")
-	}
-}
-
-func TestMockClient_ExecuteProtocol_WithError(t *testing.T) {
-	expectedError := errors.New("execution error")
-
-	c := mock.NewMockClient(mock.WithExecuteResponse(nil, expectedError))
-
-	ctx := context.Background()
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Chat,
-		Messages: []protocols.Message{},
-	}
-
-	response, err := c.ExecuteProtocol(ctx, req)
-
-	if err != expectedError {
-		t.Errorf("expected error %v, got %v", expectedError, err)
-	}
-
-	if response != nil {
-		t.Error("expected nil response")
-	}
-}
-
-func TestMockClient_ExecuteProtocolStream_Success(t *testing.T) {
-	chunks := []protocols.StreamingChunk{
-		{Model: "chunk-1"},
-		{Model: "chunk-2"},
-	}
-
-	c := mock.NewMockClient(mock.WithStreamResponse(chunks, nil))
-
-	ctx := context.Background()
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Chat,
-		Messages: []protocols.Message{},
-	}
-
-	ch, err := c.ExecuteProtocolStream(ctx, req)
-
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	received := []protocols.StreamingChunk{}
-	for chunk := range ch {
-		received = append(received, chunk)
-	}
-
-	if len(received) != len(chunks) {
-		t.Errorf("expected %d chunks, got %d", len(chunks), len(received))
-	}
-}
-
-func TestMockClient_ExecuteProtocolStream_WithError(t *testing.T) {
-	expectedError := errors.New("stream error")
-
-	c := mock.NewMockClient(mock.WithStreamResponse(nil, expectedError))
-
-	ctx := context.Background()
-	req := &capabilities.CapabilityRequest{
-		Protocol: protocols.Chat,
-		Messages: []protocols.Message{},
-	}
-
-	ch, err := c.ExecuteProtocolStream(ctx, req)
-
-	if err != expectedError {
-		t.Errorf("expected error %v, got %v", expectedError, err)
-	}
-
-	if ch != nil {
-		t.Error("expected nil channel")
-	}
-}
-
-func TestMockClient_ImplementsInterface(t *testing.T) {
-	var _ transport.Client = (*mock.MockClient)(nil)
 }

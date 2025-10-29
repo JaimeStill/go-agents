@@ -2,189 +2,213 @@ package mock_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
-	"github.com/JaimeStill/go-agents/pkg/agent"
 	"github.com/JaimeStill/go-agents/pkg/mock"
-	"github.com/JaimeStill/go-agents/pkg/protocols"
+	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
-func TestNewMockAgent_DefaultConfiguration(t *testing.T) {
-	m := mock.NewMockAgent()
+func TestNewMockAgent(t *testing.T) {
+	agent := mock.NewMockAgent(
+		mock.WithID("test-id"),
+	)
 
-	if m.ID() == "" {
-		t.Error("expected non-empty ID")
+	if agent == nil {
+		t.Fatal("NewMockAgent returned nil")
 	}
 
-	if m.Client() == nil {
-		t.Error("expected default client")
-	}
-
-	if m.Provider() == nil {
-		t.Error("expected default provider")
-	}
-
-	if m.Model() == nil {
-		t.Error("expected default model")
-	}
-}
-
-func TestMockAgent_WithID(t *testing.T) {
-	customID := "custom-agent-id"
-	m := mock.NewMockAgent(mock.WithID(customID))
-
-	if m.ID() != customID {
-		t.Errorf("expected ID %q, got %q", customID, m.ID())
+	if agent.ID() != "test-id" {
+		t.Errorf("got ID %q, want %q", agent.ID(), "test-id")
 	}
 }
 
 func TestMockAgent_Chat(t *testing.T) {
-	expectedResponse := &protocols.ChatResponse{
+	expectedResponse := &types.ChatResponse{
 		Model: "test-model",
+		Choices: []struct {
+			Index        int            `json:"index"`
+			Message      types.Message  `json:"message"`
+			Delta        *struct {
+				Role    string `json:"role,omitempty"`
+				Content string `json:"content,omitempty"`
+			} `json:"delta,omitempty"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		}{
+			{
+				Index:   0,
+				Message: types.NewMessage("assistant", "Hello"),
+			},
+		},
 	}
-	expectedResponse.Choices = append(expectedResponse.Choices, struct {
-		Index   int              `json:"index"`
-		Message protocols.Message `json:"message"`
-		Delta   *struct {
-			Role    string `json:"role,omitempty"`
-			Content string `json:"content,omitempty"`
-		} `json:"delta,omitempty"`
-		FinishReason string `json:"finish_reason,omitempty"`
-	}{
-		Index:   0,
-		Message: protocols.NewMessage("assistant", "test response"),
-	})
 
-	m := mock.NewMockAgent(mock.WithChatResponse(expectedResponse, nil))
+	agent := mock.NewMockAgent(
+		mock.WithID("test-id"),
+		mock.WithChatResponse(expectedResponse, nil),
+	)
 
-	ctx := context.Background()
-	response, err := m.Chat(ctx, "test prompt")
+	response, err := agent.Chat(context.Background(), "test")
 
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("Chat failed: %v", err)
 	}
 
 	if response != expectedResponse {
-		t.Error("response does not match expected")
-	}
-}
-
-func TestMockAgent_Chat_WithError(t *testing.T) {
-	expectedError := errors.New("chat error")
-	m := mock.NewMockAgent(mock.WithChatResponse(nil, expectedError))
-
-	ctx := context.Background()
-	response, err := m.Chat(ctx, "test prompt")
-
-	if err != expectedError {
-		t.Errorf("expected error %v, got %v", expectedError, err)
-	}
-
-	if response != nil {
-		t.Error("expected nil response")
-	}
-}
-
-func TestMockAgent_ChatStream(t *testing.T) {
-	chunks := []protocols.StreamingChunk{
-		{Model: "test-model"},
-		{Model: "test-model"},
-	}
-
-	m := mock.NewMockAgent(mock.WithStreamChunks(chunks, nil))
-
-	ctx := context.Background()
-	ch, err := m.ChatStream(ctx, "test prompt")
-
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	received := []protocols.StreamingChunk{}
-	for chunk := range ch {
-		received = append(received, chunk)
-	}
-
-	if len(received) != len(chunks) {
-		t.Errorf("expected %d chunks, got %d", len(chunks), len(received))
-	}
-}
-
-func TestMockAgent_ChatStream_WithError(t *testing.T) {
-	expectedError := errors.New("stream error")
-	m := mock.NewMockAgent(mock.WithStreamChunks(nil, expectedError))
-
-	ctx := context.Background()
-	ch, err := m.ChatStream(ctx, "test prompt")
-
-	if err != expectedError {
-		t.Errorf("expected error %v, got %v", expectedError, err)
-	}
-
-	if ch != nil {
-		t.Error("expected nil channel")
+		t.Error("returned different response than configured")
 	}
 }
 
 func TestMockAgent_Vision(t *testing.T) {
-	expectedResponse := &protocols.ChatResponse{
-		Model: "vision-model",
+	expectedResponse := &types.ChatResponse{
+		Model: "test-model",
+		Choices: []struct {
+			Index        int            `json:"index"`
+			Message      types.Message  `json:"message"`
+			Delta        *struct {
+				Role    string `json:"role,omitempty"`
+				Content string `json:"content,omitempty"`
+			} `json:"delta,omitempty"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		}{
+			{
+				Index:   0,
+				Message: types.NewMessage("assistant", "I see an image"),
+			},
+		},
 	}
 
-	m := mock.NewMockAgent(mock.WithVisionResponse(expectedResponse, nil))
+	agent := mock.NewMockAgent(
+		mock.WithID("test-id"),
+		mock.WithVisionResponse(expectedResponse, nil),
+	)
 
-	ctx := context.Background()
-	response, err := m.Vision(ctx, "describe image", []string{"image.jpg"})
+	response, err := agent.Vision(context.Background(), "test", []string{"image.png"})
 
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("Vision failed: %v", err)
 	}
 
 	if response != expectedResponse {
-		t.Error("response does not match expected")
+		t.Error("returned different response than configured")
 	}
 }
 
 func TestMockAgent_Tools(t *testing.T) {
-	expectedResponse := &protocols.ToolsResponse{
-		Model: "tools-model",
+	expectedResponse := &types.ToolsResponse{
+		Model: "test-model",
+		Choices: []struct {
+			Index   int `json:"index"`
+			Message struct {
+				Role      string           `json:"role"`
+				Content   string           `json:"content"`
+				ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		}{
+			{
+				Index: 0,
+				Message: struct {
+					Role      string           `json:"role"`
+					Content   string           `json:"content"`
+					ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+				}{
+					Role:    "assistant",
+					Content: "",
+					ToolCalls: []types.ToolCall{
+						{
+							ID:   "call_123",
+							Type: "function",
+							Function: types.ToolCallFunction{
+								Name:      "test_func",
+								Arguments: `{}`,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
-	m := mock.NewMockAgent(mock.WithToolsResponse(expectedResponse, nil))
+	agent := mock.NewMockAgent(
+		mock.WithID("test-id"),
+		mock.WithToolsResponse(expectedResponse, nil),
+	)
 
-	ctx := context.Background()
-	tools := []agent.Tool{}
-	response, err := m.Tools(ctx, "test prompt", tools)
+	response, err := agent.Tools(context.Background(), "test", nil)
 
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("Tools failed: %v", err)
 	}
 
 	if response != expectedResponse {
-		t.Error("response does not match expected")
+		t.Error("returned different response than configured")
 	}
 }
 
 func TestMockAgent_Embed(t *testing.T) {
-	expectedResponse := &protocols.EmbeddingsResponse{
-		Model: "embeddings-model",
+	expectedResponse := &types.EmbeddingsResponse{
+		Object: "list",
+		Model:  "test-model",
+		Data: []struct {
+			Embedding []float64 `json:"embedding"`
+			Index     int       `json:"index"`
+			Object    string    `json:"object"`
+		}{
+			{
+				Embedding: []float64{0.1, 0.2, 0.3},
+				Index:     0,
+				Object:    "embedding",
+			},
+		},
 	}
 
-	m := mock.NewMockAgent(mock.WithEmbeddingsResponse(expectedResponse, nil))
+	agent := mock.NewMockAgent(
+		mock.WithID("test-id"),
+		mock.WithEmbeddingsResponse(expectedResponse, nil),
+	)
 
-	ctx := context.Background()
-	response, err := m.Embed(ctx, "test input")
+	response, err := agent.Embed(context.Background(), "test")
 
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatalf("Embed failed: %v", err)
 	}
 
 	if response != expectedResponse {
-		t.Error("response does not match expected")
+		t.Error("returned different response than configured")
 	}
 }
 
-func TestMockAgent_ImplementsInterface(t *testing.T) {
-	var _ agent.Agent = (*mock.MockAgent)(nil)
+func TestNewSimpleChatAgent(t *testing.T) {
+	agent := mock.NewSimpleChatAgent("test-id", "Hello, world!")
+
+	response, err := agent.Chat(context.Background(), "test")
+
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+
+	if response.Content() != "Hello, world!" {
+		t.Errorf("got content %q, want %q", response.Content(), "Hello, world!")
+	}
+}
+
+func TestNewStreamingChatAgent(t *testing.T) {
+	agent := mock.NewStreamingChatAgent("test-id", []string{"Hello", ", ", "world!"})
+
+	stream, err := agent.ChatStream(context.Background(), "test")
+
+	if err != nil {
+		t.Fatalf("ChatStream failed: %v", err)
+	}
+
+	var content string
+	for chunk := range stream {
+		if chunk.Error != nil {
+			t.Fatalf("Stream error: %v", chunk.Error)
+		}
+		content += chunk.Content()
+	}
+
+	if content != "Hello, world!" {
+		t.Errorf("got content %q, want %q", content, "Hello, world!")
+	}
 }

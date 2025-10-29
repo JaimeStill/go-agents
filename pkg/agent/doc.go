@@ -12,15 +12,15 @@
 //	    Provider() providers.Provider
 //	    Model() models.Model
 //
-//	    Chat(ctx context.Context, prompt string, opts ...map[string]any) (*protocols.ChatResponse, error)
-//	    ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
+//	    Chat(ctx context.Context, prompt string, opts ...map[string]any) (*types.ChatResponse, error)
+//	    ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan types.StreamingChunk, error)
 //
-//	    Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*protocols.ChatResponse, error)
-//	    VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan protocols.StreamingChunk, error)
+//	    Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*types.ChatResponse, error)
+//	    VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan types.StreamingChunk, error)
 //
-//	    Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*protocols.ToolsResponse, error)
+//	    Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*types.ToolsResponse, error)
 //
-//	    Embed(ctx context.Context, input string, opts ...map[string]any) (*protocols.EmbeddingsResponse, error)
+//	    Embed(ctx context.Context, input string, opts ...map[string]any) (*types.EmbeddingsResponse, error)
 //	}
 //
 // # Creating an Agent

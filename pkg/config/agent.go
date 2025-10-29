@@ -7,25 +7,25 @@ import (
 )
 
 // AgentConfig defines the complete configuration for an agent.
-// It includes the agent name, optional system prompt, and transport configuration.
+// It includes the agent name, optional system prompt, and client configuration.
 type AgentConfig struct {
-	Name         string           `json:"name"`
-	SystemPrompt string           `json:"system_prompt,omitempty"`
-	Transport    *TransportConfig `json:"transport,omitempty"`
+	Name         string        `json:"name"`
+	SystemPrompt string        `json:"system_prompt,omitempty"`
+	Client       *ClientConfig `json:"client,omitempty"`
 }
 
 // DefaultAgentConfig creates an AgentConfig with default values.
 func DefaultAgentConfig() AgentConfig {
-	transport := DefaultTransportConfig()
+	client := DefaultClientConfig()
 	return AgentConfig{
 		Name:         "default-agent",
 		SystemPrompt: "",
-		Transport:    transport,
+		Client:       client,
 	}
 }
 
 // Merge combines the source AgentConfig into this AgentConfig.
-// Non-empty name, system_prompt, and transport from source override the current values.
+// Non-empty name, system_prompt, and client from source override the current values.
 func (c *AgentConfig) Merge(source *AgentConfig) {
 	if source.Name != "" {
 		c.Name = source.Name
@@ -35,11 +35,11 @@ func (c *AgentConfig) Merge(source *AgentConfig) {
 		c.SystemPrompt = source.SystemPrompt
 	}
 
-	if source.Transport != nil {
-		if c.Transport == nil {
-			c.Transport = source.Transport
+	if source.Client != nil {
+		if c.Client == nil {
+			c.Client = source.Client
 		} else {
-			c.Transport.Merge(source.Transport)
+			c.Client.Merge(source.Client)
 		}
 	}
 }

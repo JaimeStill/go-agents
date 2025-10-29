@@ -14,7 +14,6 @@ import (
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/document"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/encoding"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/processing"
-	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/retry"
 )
 
 func ClassifyDocument(
@@ -54,7 +53,7 @@ func ClassifyDocument(
 		cfg.Processing.Sequential,
 		pages,
 		initial,
-		createClassifier(a, cfg.Processing.Retry),
+		createClassifier(a),
 		progressFunc,
 	)
 
@@ -67,7 +66,6 @@ func ClassifyDocument(
 
 func createClassifier(
 	a agent.Agent,
-	retryCfg config.RetryConfig,
 ) processing.ContextProcessor[DocumentClassification] {
 	return func(
 		ctx context.Context,
@@ -90,38 +88,26 @@ func createClassifier(
 
 		prompt := buildClassificationPrompt(current)
 
-		updated, err := retry.Do(ctx, retryCfg, func(ctx context.Context, attempt int) (DocumentClassification, error) {
-			if attempt > 1 {
-				fmt.Fprintf(os.Stderr, "  Retry attempt %d for %s page %d...\n", attempt-1, current.File, page.Number())
-			}
-
-			response, err := a.Vision(ctx, prompt, []string{encoded})
-			if err != nil {
-				return current, err
-			}
-
-			if len(response.Choices) == 0 {
-				return current, fmt.Errorf("empty response for page %d", page.Number())
-			}
-
-			content := response.Content()
-			if strings.TrimSpace(content) == "" {
-				return current, fmt.Errorf("received empty classification for page %d", page.Number())
-			}
-
-			classification, err := parseClassificationResponse(content)
-			if err != nil {
-				return current, fmt.Errorf("failed to parse page %d response: %w", page.Number(), err)
-			}
-
-			return classification, nil
-		})
-
+		response, err := a.Vision(ctx, prompt, []string{encoded})
 		if err != nil {
 			return current, fmt.Errorf("vision request failed for page %d: %w", page.Number(), err)
 		}
 
-		return updated, nil
+		if len(response.Choices) == 0 {
+			return current, fmt.Errorf("empty response for page %d", page.Number())
+		}
+
+		content := response.Content()
+		if strings.TrimSpace(content) == "" {
+			return current, fmt.Errorf("received empty classification for page %d", page.Number())
+		}
+
+		classification, err := parseClassificationResponse(content)
+		if err != nil {
+			return current, fmt.Errorf("failed to parse page %d response: %w", page.Number(), err)
+		}
+
+		return classification, nil
 	}
 }
 

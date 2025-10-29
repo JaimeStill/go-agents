@@ -4,26 +4,19 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
-	"github.com/JaimeStill/go-agents/pkg/models"
 	"github.com/JaimeStill/go-agents/pkg/providers"
+	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
 func TestNewBaseProvider(t *testing.T) {
 	modelCfg := &config.ModelConfig{
 		Name: "test-model",
-		Capabilities: map[string]config.CapabilityConfig{
-			"chat": {
-				Format:  "openai-chat",
-				Options: map[string]any{},
-			},
+		Capabilities: map[string]map[string]any{
+			"chat": {"temperature": 0.7},
 		},
 	}
 
-	model, err := models.New(modelCfg)
-	if err != nil {
-		t.Fatalf("failed to create model: %v", err)
-	}
-
+	model := types.FromConfig(modelCfg)
 	provider := providers.NewBaseProvider("test-provider", "https://api.example.com", model)
 
 	if provider == nil {
@@ -42,20 +35,20 @@ func TestNewBaseProvider(t *testing.T) {
 		t.Error("Model() returned nil")
 	}
 
-	if provider.Model().Name() != "test-model" {
-		t.Errorf("got model name %q, want %q", provider.Model().Name(), "test-model")
+	if provider.Model().Name != "test-model" {
+		t.Errorf("got model name %q, want %q", provider.Model().Name, "test-model")
 	}
 }
 
 func TestBaseProvider_Name(t *testing.T) {
 	modelCfg := &config.ModelConfig{
 		Name: "test-model",
-		Capabilities: map[string]config.CapabilityConfig{
-			"chat": {Format: "openai-chat"},
+		Capabilities: map[string]map[string]any{
+			"chat": {},
 		},
 	}
 
-	model, _ := models.New(modelCfg)
+	model := types.FromConfig(modelCfg)
 	provider := providers.NewBaseProvider("my-provider", "https://api.test.com", model)
 
 	if provider.Name() != "my-provider" {
@@ -66,12 +59,12 @@ func TestBaseProvider_Name(t *testing.T) {
 func TestBaseProvider_BaseURL(t *testing.T) {
 	modelCfg := &config.ModelConfig{
 		Name: "test-model",
-		Capabilities: map[string]config.CapabilityConfig{
-			"chat": {Format: "openai-chat"},
+		Capabilities: map[string]map[string]any{
+			"chat": {},
 		},
 	}
 
-	model, _ := models.New(modelCfg)
+	model := types.FromConfig(modelCfg)
 	provider := providers.NewBaseProvider("test", "https://custom.api.com/v2", model)
 
 	if provider.BaseURL() != "https://custom.api.com/v2" {
@@ -82,17 +75,12 @@ func TestBaseProvider_BaseURL(t *testing.T) {
 func TestBaseProvider_Model(t *testing.T) {
 	modelCfg := &config.ModelConfig{
 		Name: "gpt-4",
-		Capabilities: map[string]config.CapabilityConfig{
-			"chat": {
-				Format: "openai-chat",
-				Options: map[string]any{
-					"temperature": 0.7,
-				},
-			},
+		Capabilities: map[string]map[string]any{
+			"chat": {"temperature": 0.7},
 		},
 	}
 
-	model, _ := models.New(modelCfg)
+	model := types.FromConfig(modelCfg)
 	provider := providers.NewBaseProvider("test", "https://api.test.com", model)
 
 	result := provider.Model()
@@ -101,7 +89,7 @@ func TestBaseProvider_Model(t *testing.T) {
 		t.Fatal("Model() returned nil")
 	}
 
-	if result.Name() != "gpt-4" {
-		t.Errorf("got model name %q, want %q", result.Name(), "gpt-4")
+	if result.Name != "gpt-4" {
+		t.Errorf("got model name %q, want %q", result.Name, "gpt-4")
 	}
 }

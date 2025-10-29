@@ -2,7 +2,7 @@
 
 A platform and model agnostic Go agent primitive library.
 
-## Status: Pre-Release (v0.1.0)
+## Status: Pre-Release (v0.2.0)
 
 **go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
 
@@ -14,28 +14,28 @@ A platform and model agnostic Go agent primitive library.
 
 ## Current Implementation
 
-The package provides a complete multi-protocol LLM integration system with a composable capabilities architecture:
+The package provides a complete multi-protocol LLM integration system with a protocol-centric architecture:
 
+- **Protocol-Specific Request Types**: Dedicated request types (ChatRequest, VisionRequest, ToolsRequest, EmbeddingsRequest) with protocol-appropriate fields
 - **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational with protocol-specific response types
-- **Composable Capabilities**: Models configure protocols independently with isolated options and format selection
-- **Capability Format Registry**: Extensible format registration supporting OpenAI, reasoning models, and custom implementations
-- **Protocol Isolation**: Each protocol has dedicated options, preventing validation conflicts
-- **Structured Content Support**: Vision protocol handles multimodal content, tools protocol returns structured tool calls
-- **Multiple Provider Integration**: Working Ollama and Azure AI Foundry providers with authentication (API keys, Entra ID)
-- **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples including tool calling
-- **Human-Readable Configuration**: Duration strings ("24s", "1m") and clear capability composition
-- **Validation Timing**: Options validated after merge in transport layer with complete request context
-- **Thread-Safe Operations**: Proper connection pooling, streaming support (where supported), and concurrent request handling
+- **Multi-Provider Support**: Working Ollama and Azure AI Foundry providers with authentication (API keys, Entra ID)
+- **OpenAI Format Standard**: Tools wrapped in OpenAI format by default, vision images embedded in message content
+- **Configuration Pass-Through**: Simple option pass-through without runtime merging for predictable behavior
+- **Structured Content Support**: Vision protocol handles multimodal content with image options, tools protocol returns structured tool calls
+- **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples
+- **Human-Readable Configuration**: Duration strings ("24s", "1m") and clean JSON configuration
+- **Thread-Safe Operations**: Proper connection pooling, streaming support (chat, vision, tools), and concurrent request handling
+- **Mock Implementations**: Complete mock package for testing agent-based systems
 
 ## Development Status
 
-### Current Phase: Stable and Operational
+### Current Phase: v0.2.0 - Protocol-Centric Architecture
 
-**Completed**: Composable capabilities architecture fully implemented with protocol-specific configuration, option isolation, validation timing fixes, and tool calling support. All four protocols operational with proper response types.
+**Completed**: Major architectural refactor to protocol-specific request types. Separates protocol input data (images, tools, input text) from model configuration options (temperature, max_tokens). All protocols validated with Ollama and Azure.
 
-**Active Focus**: The system is stable and ready for use. Future enhancements can be addressed as needed.
+**Active Focus**: The system is stable and ready for use. Architecture simplified with clear boundaries between protocol data and configuration.
 
-**Architecture Highlights**: Protocol handlers with isolated options, capability format registry, validation after option merge, human-readable duration configuration, and protocol-specific response types (ChatResponse, ToolsResponse, EmbeddingsResponse).
+**Architecture Highlights**: Protocol-specific request types implementing ProtocolRequest interface, OpenAI format as default standard, option pass-through without runtime merging, vision and tools protocols properly handling structured data.
 
 ## Getting Started
 
@@ -88,7 +88,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -96,20 +96,14 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "tools": {
-              "format": "tools",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "tool_choice": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
             }
           }
         }
@@ -171,7 +165,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "azure-key-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -179,10 +173,7 @@ go run tools/prompt-agent/main.go \
           "name": "o3-mini",
           "capabilities": {
             "chat": {
-              "format": "o-chat",
-              "options": {
-                "max_completion_tokens": 4096
-              }
+              "max_completion_tokens": 4096
             }
           }
         },
@@ -235,7 +226,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "azure-key-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -243,10 +234,7 @@ go run tools/prompt-agent/main.go \
           "name": "o3-mini",
           "capabilities": {
             "chat": {
-              "format": "o-chat",
-              "options": {
-                "max_completion_tokens": 4096
-              }
+              "max_completion_tokens": 4096
             }
           }
         },
@@ -294,7 +282,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "vision-agent",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -302,20 +290,14 @@ go run tools/prompt-agent/main.go \
           "name": "gemma3:4b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "vision": {
-              "format": "vision",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "detail": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "detail": "auto"
             }
           }
         }
@@ -377,7 +359,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "vision-agent",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -385,20 +367,14 @@ go run tools/prompt-agent/main.go \
           "name": "gemma3:4b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "vision": {
-              "format": "vision",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "detail": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "detail": "auto"
             }
           }
         }
@@ -453,7 +429,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -461,20 +437,14 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "tools": {
-              "format": "tools",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "tool_choice": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
             }
           }
         }
@@ -516,7 +486,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -524,20 +494,14 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "tools": {
-              "format": "tools",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "tool_choice": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
             }
           }
         }
@@ -579,7 +543,7 @@ go run tools/prompt-agent/main.go \
   {
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -587,20 +551,14 @@ go run tools/prompt-agent/main.go \
           "name": "llama3.2:3b",
           "capabilities": {
             "chat": {
-              "format": "chat",
-              "options": {
                 "max_tokens": 4096,
                 "temperature": 0.7,
                 "top_p": 0.95
-              }
             },
             "tools": {
-              "format": "tools",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "tool_choice": "auto"
-              }
+              "max_tokens": 4096,
+              "temperature": 0.7,
+              "tool_choice": "auto"
             }
           }
         }
@@ -641,7 +599,7 @@ go run tools/prompt-agent/main.go \
   ```json
   {
     "name": "embeddings-agent",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -649,10 +607,7 @@ go run tools/prompt-agent/main.go \
           "name": "embeddinggemma:300m",
           "capabilities": {
             "embeddings": {
-              "format": "embeddings",
-              "options": {
-                "dimensions": 768
-              }
+              "dimensions": 768
             }
           }
         }
@@ -686,13 +641,13 @@ Token Usage: 9 total
 
 ### Configuration
 
-Agent configurations use hierarchical JSON with transport-based structure:
+Agent configurations use hierarchical JSON with client-based structure:
 
 ```json
 {
   "name": "research-assistant",
   "system_prompt": "You are a helpful research assistant focused on providing accurate and comprehensive information",
-  "transport": {
+  "client": {
     "provider": {
       "name": "ollama",
       "base_url": "http://localhost:11434",
@@ -700,20 +655,14 @@ Agent configurations use hierarchical JSON with transport-based structure:
         "name": "llama3.2:3b",
         "capabilities": {
           "chat": {
-            "format": "chat",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "top_p": 0.95
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "top_p": 0.95
           },
           "tools": {
-            "format": "tools",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "tool_choice": "auto"
           }
         }
       }
@@ -733,7 +682,7 @@ For Azure AI Foundry with reasoning models:
 {
   "name": "azure-assistant",
   "system_prompt": "You are a thoughtful AI assistant that provides detailed analysis and reasoning",
-  "transport": {
+  "client": {
     "provider": {
       "name": "azure",
       "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -741,10 +690,7 @@ For Azure AI Foundry with reasoning models:
         "name": "o3-mini",
         "capabilities": {
           "chat": {
-            "format": "o-chat",
-            "options": {
-              "max_completion_tokens": 4096
-            }
+            "max_completion_tokens": 4096
           }
         }
       },
@@ -777,11 +723,9 @@ go test ./tests/... -v
 **Run tests for a specific package:**
 ```bash
 go test ./tests/config/... -v
-go test ./tests/protocols/... -v
-go test ./tests/capabilities/... -v
-go test ./tests/models/... -v
+go test ./tests/types/... -v
 go test ./tests/providers/... -v
-go test ./tests/transport/... -v
+go test ./tests/client/... -v
 go test ./tests/agent/... -v
 go test ./tests/mock/... -v
 ```
@@ -798,7 +742,7 @@ go tool cover -func=coverage.out
 go tool cover -html=coverage.out -o coverage.html
 ```
 
-**Current Coverage**: 89.3% overall (exceeds 80% minimum requirement)
+**Current Coverage**: 54.8% overall (working towards 80% minimum requirement)
 
 ### Testing Your Code
 
@@ -821,7 +765,6 @@ import (
 
     "github.com/JaimeStill/go-agents/pkg/agent"
     "github.com/JaimeStill/go-agents/pkg/mock"
-    "github.com/JaimeStill/go-agents/pkg/protocols"
 )
 
 func TestMyOrchestrator(t *testing.T) {
@@ -864,18 +807,16 @@ go doc github.com/JaimeStill/go-agents/pkg/agent
 
 # View specific type documentation
 go doc github.com/JaimeStill/go-agents/pkg/agent.Agent
-go doc github.com/JaimeStill/go-agents/pkg/protocols.Protocol
-go doc github.com/JaimeStill/go-agents/pkg/capabilities.Capability
+go doc github.com/JaimeStill/go-agents/pkg/types.Protocol
+go doc github.com/JaimeStill/go-agents/pkg/client.Client
 ```
 
 **View all available packages:**
 ```bash
 go doc github.com/JaimeStill/go-agents/pkg/config
-go doc github.com/JaimeStill/go-agents/pkg/protocols
-go doc github.com/JaimeStill/go-agents/pkg/capabilities
-go doc github.com/JaimeStill/go-agents/pkg/models
+go doc github.com/JaimeStill/go-agents/pkg/types
 go doc github.com/JaimeStill/go-agents/pkg/providers
-go doc github.com/JaimeStill/go-agents/pkg/transport
+go doc github.com/JaimeStill/go-agents/pkg/client
 go doc github.com/JaimeStill/go-agents/pkg/agent
 go doc github.com/JaimeStill/go-agents/pkg/mock
 ```
@@ -900,4 +841,4 @@ For detailed information on the testing approach, patterns, and coverage require
 - Black-box testing using `package_test` suffix
 - Table-driven test patterns
 - HTTP mocking with `httptest.Server`
-- 80% minimum coverage requirement (89.3% achieved)
+- 80% minimum coverage requirement (54.8% achieved, working towards goal)

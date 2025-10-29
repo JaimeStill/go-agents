@@ -1,7 +1,7 @@
 {
   "agent": {
     "name": "classify-agent-o4mini",
-    "transport": {
+    "client": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -9,8 +9,7 @@
           "name": "o4-mini",
           "capabilities": {
             "vision": {
-              "format": "o-vision",
-              "options": {
+              "image_options": {
                 "detail": "high",
                 "reasoning_effort": "high"
               }

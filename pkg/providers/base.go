@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/JaimeStill/go-agents/pkg/models"
+import "github.com/JaimeStill/go-agents/pkg/types"
 
 // BaseProvider provides common functionality for provider implementations.
 // It stores the provider name, base URL, and model instance.
@@ -8,12 +8,12 @@ import "github.com/JaimeStill/go-agents/pkg/models"
 type BaseProvider struct {
 	name    string
 	baseURL string
-	model   models.Model
+	model   *types.Model
 }
 
 // NewBaseProvider creates a new BaseProvider with the given name, base URL, and model.
 // This is typically called by provider constructors to initialize common fields.
-func NewBaseProvider(name, baseURL string, model models.Model) *BaseProvider {
+func NewBaseProvider(name, baseURL string, model *types.Model) *BaseProvider {
 	return &BaseProvider{
 		name:    name,
 		baseURL: baseURL,
@@ -33,6 +33,6 @@ func (p *BaseProvider) BaseURL() string {
 }
 
 // Model returns the model instance managed by this provider.
-func (p *BaseProvider) Model() models.Model {
+func (p *BaseProvider) Model() *types.Model {
 	return p.model
 }

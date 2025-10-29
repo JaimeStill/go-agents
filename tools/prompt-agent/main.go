@@ -40,10 +40,10 @@ func main() {
 	}
 
 	if *token != "" {
-		if cfg.Transport.Provider.Options == nil {
-			cfg.Transport.Provider.Options = make(map[string]any)
+		if cfg.Client.Provider.Options == nil {
+			cfg.Client.Provider.Options = make(map[string]any)
 		}
-		cfg.Transport.Provider.Options["token"] = *token
+		cfg.Client.Provider.Options["token"] = *token
 	}
 
 	if *systemPrompt != "" {
@@ -55,7 +55,7 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Transport.Timeout.ToDuration())
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Client.Timeout.ToDuration())
 	defer cancel()
 
 	switch *protocol {

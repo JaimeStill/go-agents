@@ -107,10 +107,10 @@ func WithName(name string) ErrorOption {
 	}
 }
 
-// WithClient extracts client identification from transport configuration.
+// WithClient extracts client identification from client configuration.
 // Creates a string in the format "provider/model", "provider", or "model"
 // depending on available information.
-func WithClient(client *config.TransportConfig) ErrorOption {
+func WithClient(client *config.ClientConfig) ErrorOption {
 	return func(e *AgentError) {
 		if client.Provider.Name != "" && client.Provider.Model.Name != "" {
 			e.Client = fmt.Sprintf("%s/%s", client.Provider.Name, client.Provider.Model.Name)
