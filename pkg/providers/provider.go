@@ -4,9 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/JaimeStill/go-agents/pkg/capabilities"
-	"github.com/JaimeStill/go-agents/pkg/models"
-	"github.com/JaimeStill/go-agents/pkg/protocols"
+	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
 // Provider defines the interface for LLM service provider implementations.
@@ -17,33 +15,35 @@ type Provider interface {
 	Name() string
 
 	// Model returns the model instance managed by this provider.
-	Model() models.Model
+	Model() *types.Model
 
 	// GetEndpoint returns the full endpoint URL for a protocol.
 	// Returns an error if the protocol is not supported by this provider.
-	GetEndpoint(protocol protocols.Protocol) (string, error)
+	GetEndpoint(protocol types.Protocol) (string, error)
 
 	// SetHeaders sets provider-specific authentication and custom headers on an HTTP request.
 	// This is called after the request is created but before it is executed.
 	SetHeaders(req *http.Request)
 
 	// PrepareRequest creates a Request for standard (non-streaming) protocol execution.
-	// Converts a protocols.Request into a provider-specific HTTP request structure.
-	PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error)
+	// Accepts protocol-specific request types (ChatRequest, VisionRequest, etc.).
+	// Marshals the request and prepares it for HTTP transmission.
+	PrepareRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error)
 
 	// PrepareStreamRequest creates a Request for streaming protocol execution.
-	// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
-	PrepareStreamRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error)
+	// Accepts protocol-specific request types and adds streaming-specific headers.
+	// Adds Accept: text/event-stream and Cache-Control: no-cache headers.
+	PrepareStreamRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error)
 
 	// ProcessResponse processes a standard HTTP response and returns the parsed result.
-	// Delegates parsing to the capability's ParseResponse method.
+	// Uses types.ParseResponse for protocol-aware parsing.
 	// Returns an error if the HTTP status is not OK or parsing fails.
-	ProcessResponse(response *http.Response, capability capabilities.Capability) (any, error)
+	ProcessResponse(ctx context.Context, response *http.Response, protocol types.Protocol) (any, error)
 
 	// ProcessStreamResponse processes a streaming HTTP response and returns a channel of chunks.
 	// The channel is closed when the stream completes or an error occurs.
 	// Context cancellation stops processing and closes the channel.
-	ProcessStreamResponse(ctx context.Context, response *http.Response, capability capabilities.StreamingCapability) (<-chan any, error)
+	ProcessStreamResponse(ctx context.Context, response *http.Response, protocol types.Protocol) (<-chan any, error)
 }
 
 // Request represents a prepared provider request with all necessary components for HTTP execution.

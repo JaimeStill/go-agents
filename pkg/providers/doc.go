@@ -28,11 +28,11 @@
 //	    Name() string
 //	    Model() models.Model
 //
-//	    GetEndpoint(protocol protocols.Protocol) (string, error)
+//	    GetEndpoint(protocol types.Protocol) (string, error)
 //	    SetHeaders(req *http.Request)
 //
-//	    PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error)
-//	    PrepareStreamRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error)
+//	    PrepareRequest(ctx context.Context, protocol types.Protocol, request *types.Request) (*Request, error)
+//	    PrepareStreamRequest(ctx context.Context, protocol types.Protocol, request *types.Request) (*Request, error)
 //	    ProcessResponse(response *http.Response, capability capabilities.Capability) (any, error)
 //	    ProcessStreamResponse(ctx context.Context, response *http.Response, capability capabilities.StreamingCapability) (<-chan any, error)
 //	}
@@ -125,10 +125,10 @@
 // Standard request flow:
 //
 //	// 1. Get endpoint for protocol
-//	endpoint, err := provider.GetEndpoint(protocols.Chat)
+//	endpoint, err := provider.GetEndpoint(types.Chat)
 //
 //	// 2. Prepare request
-//	request, err := provider.PrepareRequest(ctx, protocols.Chat, protocolRequest)
+//	request, err := provider.PrepareRequest(ctx, types.Chat, protocolRequest)
 //
 //	// 3. Create HTTP request
 //	httpReq, err := http.NewRequestWithContext(ctx, "POST", request.URL, bytes.NewReader(request.Body))
@@ -146,7 +146,7 @@
 // Streaming request flow:
 //
 //	// 1-4. Same as standard flow, but use PrepareStreamRequest
-//	request, err := provider.PrepareStreamRequest(ctx, protocols.Chat, protocolRequest)
+//	request, err := provider.PrepareStreamRequest(ctx, types.Chat, protocolRequest)
 //
 //	// 5. Process streaming response
 //	chunks, err := provider.ProcessStreamResponse(ctx, resp, capability)
@@ -243,7 +243,7 @@
 //	    }, nil
 //	}
 //
-//	func (p *CustomProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
+//	func (p *CustomProvider) GetEndpoint(protocol types.Protocol) (string, error) {
 //	    // Implement endpoint logic
 //	}
 //

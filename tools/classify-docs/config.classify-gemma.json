@@ -1,7 +1,7 @@
 {
   "agent": {
     "name": "classify-agent-gemma",
-    "transport": {
+    "client": {
       "provider": {
         "name": "ollama",
         "base_url": "http://localhost:11434",
@@ -9,9 +9,8 @@
           "name": "gemma3:4b",
           "capabilities": {
             "vision": {
-              "format": "vision",
-              "options": {
-                "temperature": 0.1,
+              "temperature": 0.1,
+              "image_options": {
                 "detail": "high"
               }
             }

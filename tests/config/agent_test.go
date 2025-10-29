@@ -14,7 +14,7 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 	jsonData := `{
 		"name": "test-agent",
 		"system_prompt": "You are a helpful assistant",
-		"transport": {
+		"client": {
 			"provider": {
 				"name": "ollama",
 				"base_url": "http://localhost:11434",
@@ -22,16 +22,15 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 					"name": "llama3.2:3b",
 					"capabilities": {
 						"chat": {
-							"format": "openai-chat",
-							"options": {
-								"temperature": 0.7
-							}
+							"temperature": 0.7
 						}
 					}
 				}
 			},
 			"timeout": "24s",
-			"max_retries": 3
+			"retry": {
+				"max_retries": 3
+			}
 		}
 	}`
 
@@ -48,16 +47,16 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 		t.Errorf("got system_prompt %s, want 'You are a helpful assistant'", cfg.SystemPrompt)
 	}
 
-	if cfg.Transport == nil {
-		t.Fatal("transport is nil")
+	if cfg.Client == nil {
+		t.Fatal("client is nil")
 	}
 
-	if cfg.Transport.Provider == nil {
+	if cfg.Client.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Transport.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama", cfg.Transport.Provider.Name)
+	if cfg.Client.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama", cfg.Client.Provider.Name)
 	}
 }
 
@@ -65,25 +64,19 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 	cfg := &config.AgentConfig{
 		Name:         "full-agent",
 		SystemPrompt: "Test system prompt",
-		Transport: &config.TransportConfig{
+		Client: &config.ClientConfig{
 			Provider: &config.ProviderConfig{
 				Name:    "azure",
 				BaseURL: "https://example.openai.azure.com",
 				Model: &config.ModelConfig{
 					Name: "gpt-4",
-					Capabilities: config.ModelCapabilities{
-						"chat": config.CapabilityConfig{
-							Format: "openai-chat",
-							Options: map[string]any{
-								"temperature": 0.7,
-								"max_tokens":  4096,
-							},
+					Capabilities: map[string]map[string]any{
+						"chat": {
+							"temperature": 0.7,
+							"max_tokens":  4096,
 						},
-						"vision": config.CapabilityConfig{
-							Format: "openai-vision",
-							Options: map[string]any{
-								"detail": "auto",
-							},
+						"vision": {
+							"detail": "auto",
 						},
 					},
 				},
@@ -93,9 +86,11 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 					"auth_type":   "api_key",
 				},
 			},
-			Timeout:            config.Duration(24 * time.Second),
-			MaxRetries:         3,
-			RetryBackoffBase:   config.Duration(1 * time.Second),
+			Timeout: config.Duration(24 * time.Second),
+			Retry: config.RetryConfig{
+				MaxRetries:     3,
+				InitialBackoff: config.Duration(1 * time.Second),
+			},
 			ConnectionPoolSize: 10,
 			ConnectionTimeout:  config.Duration(9 * time.Second),
 		},
@@ -109,12 +104,12 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 		t.Errorf("got system_prompt %s, want 'Test system prompt'", cfg.SystemPrompt)
 	}
 
-	if cfg.Transport.Provider.Model.Name != "gpt-4" {
-		t.Errorf("got model name %s, want gpt-4", cfg.Transport.Provider.Model.Name)
+	if cfg.Client.Provider.Model.Name != "gpt-4" {
+		t.Errorf("got model name %s, want gpt-4", cfg.Client.Provider.Model.Name)
 	}
 
-	if len(cfg.Transport.Provider.Model.Capabilities) != 2 {
-		t.Errorf("got %d capabilities, want 2", len(cfg.Transport.Provider.Model.Capabilities))
+	if len(cfg.Client.Provider.Model.Capabilities) != 2 {
+		t.Errorf("got %d capabilities, want 2", len(cfg.Client.Provider.Model.Capabilities))
 	}
 }
 
@@ -129,16 +124,16 @@ func TestDefaultAgentConfig(t *testing.T) {
 		t.Errorf("got system_prompt %s, want empty string", cfg.SystemPrompt)
 	}
 
-	if cfg.Transport == nil {
-		t.Fatal("transport is nil")
+	if cfg.Client == nil {
+		t.Fatal("client is nil")
 	}
 
-	if cfg.Transport.Provider == nil {
+	if cfg.Client.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Transport.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama", cfg.Transport.Provider.Name)
+	if cfg.Client.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama", cfg.Client.Provider.Name)
 	}
 }
 
@@ -174,20 +169,26 @@ func TestAgentConfig_Merge(t *testing.T) {
 			},
 		},
 		{
-			name: "merge transport",
+			name: "merge client",
 			base: &config.AgentConfig{
-				Transport: &config.TransportConfig{
-					MaxRetries: 3,
+				Client: &config.ClientConfig{
+					Retry: config.RetryConfig{
+						MaxRetries: 3,
+					},
 				},
 			},
 			source: &config.AgentConfig{
-				Transport: &config.TransportConfig{
-					MaxRetries: 5,
+				Client: &config.ClientConfig{
+					Retry: config.RetryConfig{
+						MaxRetries: 5,
+					},
 				},
 			},
 			expected: &config.AgentConfig{
-				Transport: &config.TransportConfig{
-					MaxRetries: 5,
+				Client: &config.ClientConfig{
+					Retry: config.RetryConfig{
+						MaxRetries: 5,
+					},
 				},
 			},
 		},
@@ -229,12 +230,12 @@ func TestAgentConfig_Merge(t *testing.T) {
 				t.Errorf("got system_prompt %s, want %s", tt.base.SystemPrompt, tt.expected.SystemPrompt)
 			}
 
-			if tt.expected.Transport != nil {
-				if tt.base.Transport == nil {
-					t.Fatal("transport is nil after merge")
+			if tt.expected.Client != nil {
+				if tt.base.Client == nil {
+					t.Fatal("client is nil after merge")
 				}
-				if tt.base.Transport.MaxRetries != tt.expected.Transport.MaxRetries {
-					t.Errorf("got max_retries %d, want %d", tt.base.Transport.MaxRetries, tt.expected.Transport.MaxRetries)
+				if tt.base.Client.Retry.MaxRetries != tt.expected.Client.Retry.MaxRetries {
+					t.Errorf("got max_retries %d, want %d", tt.base.Client.Retry.MaxRetries, tt.expected.Client.Retry.MaxRetries)
 				}
 			}
 		})
@@ -256,7 +257,7 @@ func TestLoadAgentConfig(t *testing.T) {
 			configJSON: `{
 				"name": "test-agent",
 				"system_prompt": "Test prompt",
-				"transport": {
+				"client": {
 					"provider": {
 						"name": "ollama",
 						"base_url": "http://localhost:11434",
@@ -348,17 +349,17 @@ func TestLoadAgentConfig_MergesWithDefaults(t *testing.T) {
 		t.Errorf("got name %s, want custom-agent", cfg.Name)
 	}
 
-	// Should have default transport
-	if cfg.Transport == nil {
-		t.Fatal("transport is nil")
+	// Should have default client
+	if cfg.Client == nil {
+		t.Fatal("client is nil")
 	}
 
 	// Should have default provider
-	if cfg.Transport.Provider == nil {
+	if cfg.Client.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Transport.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama (from defaults)", cfg.Transport.Provider.Name)
+	if cfg.Client.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama (from defaults)", cfg.Client.Provider.Name)
 	}
 }

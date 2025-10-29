@@ -8,40 +8,36 @@ This document describes the current architecture and implementation patterns of 
 pkg/
 ├── config/              # Configuration management and loading
 │   ├── agent.go         # Agent configuration structure
+│   ├── client.go        # Client and retry configuration
 │   ├── duration.go      # Custom Duration type with human-readable strings
-│   ├── model.go         # Model configuration with composable capabilities
-│   ├── provider.go      # Provider configuration structures
-│   └── transport.go     # Transport layer configuration
-├── protocols/           # Protocol definitions and message structures
-│   └── protocol.go      # Protocol types, Message, Request, Response structures
-├── capabilities/        # Protocol-specific capability implementations
-│   ├── capability.go    # Core capability interface and standard implementations
-│   ├── registry.go      # Thread-safe capability format registry
-│   ├── init.go          # Capability format registrations
-│   ├── chat.go          # Chat protocol capability
-│   ├── vision.go        # Vision protocol capability with structured content
-│   ├── tools.go         # Tools protocol capability
-│   └── embeddings.go    # Embeddings protocol capability
-├── models/              # Model abstraction and protocol handler composition
-│   ├── model.go         # Model interface and implementation
-│   └── handler.go       # ProtocolHandler for stateful capability management
+│   ├── model.go         # Model configuration with protocol options
+│   ├── options.go       # Option extraction and validation utilities
+│   └── provider.go      # Provider configuration structures
+├── types/               # Core types, protocols, and message structures
+│   ├── protocol.go      # Protocol constants and type definitions
+│   ├── message.go       # Message and Request structures
+│   ├── model.go         # Model runtime type with option merging
+│   ├── chat.go          # Chat protocol request/response types
+│   ├── vision.go        # Vision protocol request/response types
+│   ├── tools.go         # Tools protocol request/response types
+│   └── embeddings.go    # Embeddings protocol request/response types
 ├── providers/           # Provider implementations for different LLM services
 │   ├── provider.go      # Provider interface definition
 │   ├── base.go          # BaseProvider with common functionality
 │   ├── registry.go      # Provider registry and initialization
 │   ├── azure.go         # Azure AI Foundry provider implementation
 │   └── ollama.go        # Ollama provider implementation
-├── transport/           # Transport layer orchestrating requests across providers
-│   └── client.go        # Transport client interface and implementation
+├── client/              # Client layer orchestrating requests across providers
+│   ├── client.go        # Client interface and implementation
+│   └── retry.go         # Exponential backoff retry logic with jitter
 ├── agent/               # High-level agent orchestration
-│   └── agent.go         # Agent interface and implementation
+│   ├── agent.go         # Agent interface and implementation
+│   └── tools.go         # Tool definition types
 └── mock/                # Mock implementations for testing
     ├── doc.go           # Package documentation
     ├── agent.go         # MockAgent implementation
     ├── client.go        # MockClient implementation
     ├── provider.go      # MockProvider implementation
-    ├── model.go         # MockModel implementation
-    ├── capability.go    # MockCapability implementation
     └── helpers.go       # Convenience constructors
 ```
 
@@ -49,7 +45,7 @@ pkg/
 
 ### Protocol System
 
-The protocol system defines the communication contracts for different LLM interactions:
+The protocol system defines the communication contracts for different LLM interactions. Protocols are the primary abstraction for capability identification.
 
 ```go
 type Protocol string
@@ -62,6 +58,15 @@ const (
 )
 ```
 
+**Protocol Methods**:
+```go
+// IsValid checks if protocol string is recognized
+func (p Protocol) IsValid() bool
+
+// SupportsStreaming indicates if protocol supports streaming responses
+func (p Protocol) SupportsStreaming() bool
+```
+
 **Message Structure**: Supports both simple text and structured content for protocols like vision:
 ```go
 type Message struct {
@@ -70,197 +75,240 @@ type Message struct {
 }
 ```
 
-**Request/Response Flow**: Unified request structure with protocol-specific options:
+**Protocol-Specific Request Types**: Each protocol has its own request type implementing the ProtocolRequest interface:
 ```go
-type Request struct {
+type ProtocolRequest interface {
+    GetProtocol() Protocol
+    GetHeaders() map[string]string
+    Marshal() ([]byte, error)
+}
+
+// Chat protocol request
+type ChatRequest struct {
     Messages []Message
     Options  map[string]any
 }
+
+// Vision protocol request - separates images and image options from model options
+type VisionRequest struct {
+    Messages     []Message
+    Images       []string            // URLs or data URIs
+    ImageOptions map[string]any      // Options for image_url (e.g., detail: "high")
+    Options      map[string]any      // Model configuration options
+}
+
+// Tools protocol request - separates tool definitions from model options
+// Tools are marshaled in OpenAI format: {"type": "function", "function": {...}}
+type ToolsRequest struct {
+    Messages []Message
+    Tools    []ToolDefinition        // Provider-agnostic tool definitions
+    Options  map[string]any
+}
+
+// Embeddings protocol request - no messages, just input text
+type EmbeddingsRequest struct {
+    Input   any                      // string or []string for batch
+    Options map[string]any
+}
 ```
+
+**Design Rationale**: Protocol-specific request types separate protocol input data (images, tools, input text) from model configuration options (temperature, max_tokens). This enables:
+- **Multi-provider support**: Providers can transform protocol data to their specific formats
+- **Type safety**: Compile-time checking for protocol-specific fields
+- **Clear separation**: Protocol inputs vs. configuration options
+- **Extensibility**: Easy to add provider-specific transformations
+
+**Tools Format Decision**: `ToolsRequest.Marshal()` wraps tool definitions in OpenAI's format (`{"type": "function", "function": {...}}`) by default. This decision was made because:
+- **Industry Standard**: OpenAI's format is used by the majority of providers (OpenAI, Azure, Ollama)
+- **Immediate Compatibility**: Works out-of-the-box with most LLM services
+- **Future Extensibility**: Providers requiring different formats (Anthropic, Google) can transform from this standard representation in their `PrepareRequest()` implementation
+
+The library maintains provider-agnostic `ToolDefinition` types in the public API while handling provider-specific formatting internally.
 
 **Protocol-Specific Responses**: Different protocols return specialized response types:
 ```go
 type ChatResponse struct {
+    Model   string
     Choices []struct {
-        Message Message
+        Index        int
+        Message      Message
+        FinishReason string
     }
     Usage *TokenUsage
 }
 
 type ToolsResponse struct {
+    Model   string
     Choices []struct {
+        Index   int
         Message struct {
             Role      string
             Content   string
             ToolCalls []ToolCall
         }
+        FinishReason string
     }
     Usage *TokenUsage
 }
 
 type EmbeddingsResponse struct {
-    Data []struct {
+    Object string
+    Model  string
+    Data   []struct {
         Embedding []float64
         Index     int
+        Object    string
     }
     Usage *TokenUsage
 }
 ```
 
-### Capability System
-
-Capabilities implement protocol-specific behavior and validation for different API formats:
-
+**Streaming Support**: Protocols that support streaming use a unified chunk structure:
 ```go
-type Capability interface {
-    Name() string
-    Protocol() protocols.Protocol
-    Options() []CapabilityOption
-    ValidateOptions(options map[string]any) error
-    ProcessOptions(options map[string]any) (map[string]any, error)
-    CreateRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
-    ParseResponse(data []byte) (any, error)
-    SupportsStreaming() bool
+type StreamingChunk struct {
+    ID      string
+    Object  string
+    Created int64
+    Model   string
+    Choices []struct {
+        Index int
+        Delta struct {
+            Role    string
+            Content string
+        }
+        FinishReason *string
+    }
+    Error error
 }
 
-type StreamingCapability interface {
-    Capability
-    CreateStreamingRequest(req *CapabilityRequest, model string) (*protocols.Request, error)
-    ParseStreamingChunk(data []byte) (*protocols.StreamingChunk, error)
-    IsStreamComplete(data string) bool
-}
-```
-
-**Capability Registry**: Thread-safe registration system for capability formats:
-```go
-func RegisterFormat(name string, factory CapabilityFactory)
-func GetFormat(name string) (Capability, error)
-```
-
-**Registered Capability Formats**:
-
-*Standard formats (OpenAI-compatible APIs):*
-- **chat**: Standard chat completions (supports temperature, top_p, etc.)
-- **vision**: Vision with structured content (images as multimodal inputs)
-- **tools**: Function calling (non-streaming)
-- **embeddings**: Text embedding generation
-
-*Model-family specific formats:*
-- **o-chat**: OpenAI o-series reasoning models (max_completion_tokens, reasoning_effort)
-- **o-vision**: OpenAI o-series vision reasoning (max_completion_tokens, reasoning_effort, images)
-
-**Option Management**: Each capability defines supported options with validation:
-```go
-type CapabilityOption struct {
-    Option       string `json:"option"`
-    Required     bool   `json:"required"`
-    DefaultValue any    `json:"default_value"`
-}
+// Content extracts the incremental content from the first choice delta
+func (c *StreamingChunk) Content() string
 ```
 
 ### Model System
 
-Models use composable capabilities with protocol-specific handlers:
+Models store the model name and protocol-specific options from configuration:
 
 ```go
-type Model interface {
-    Name() string
-    SupportsProtocol(p protocols.Protocol) bool
-    GetCapability(p protocols.Protocol) (capabilities.Capability, error)
-    GetProtocolOptions(p protocols.Protocol) map[string]any
-    UpdateProtocolOptions(p protocols.Protocol, options map[string]any) error
-    MergeRequestOptions(p protocols.Protocol, requestOptions map[string]any) map[string]any
+type Model struct {
+    Name    string
+    Options map[Protocol]map[string]any  // Loaded from config, not merged at runtime
 }
 ```
 
-**ProtocolHandler Pattern**: Manages stateful protocol configuration:
+**Design Philosophy**: Options are passed through without runtime merging. The `Options` map stores configuration from JSON files but is not actively used during request execution. This simplifies the architecture:
+
+- **Agent layer**: Adds model name to options and creates protocol-specific requests
+- **No merging**: Request options pass through as-is
+- **Configuration**: Options from config files are available via `Model.Options` but not automatically merged
+
+**Rationale**: The consolidated architecture eliminated runtime option merging to simplify the request flow. Protocol-specific options are configured in JSON files and passed through agent method calls, keeping the pipeline straightforward.
+
+**Model Creation**: Convert configuration to runtime model:
 ```go
-type ProtocolHandler struct {
-    capability capabilities.Capability  // Stateless behavior
-    options    map[string]any            // Stateful configuration
+func FromConfig(cfg *config.ModelConfig) *Model {
+    model := &Model{
+        Name:    cfg.Name,
+        Options: make(map[Protocol]map[string]any),
+    }
+
+    // Convert string keys to Protocol constants
+    for key, opts := range cfg.Capabilities {
+        protocol := Protocol(key)
+        if protocol.IsValid() {
+            model.Options[protocol] = opts
+        }
+    }
+
+    return model
 }
 ```
-
-**Model Implementation**: Explicit protocol fields with handlers:
-```go
-type model struct {
-    name       string
-    chat       *ProtocolHandler  // nil if not configured
-    vision     *ProtocolHandler  // nil if not configured
-    tools      *ProtocolHandler  // nil if not configured
-    embeddings *ProtocolHandler  // nil if not configured
-}
-```
-
-**Option Management**:
-- **Configuration Options**: Set at model creation, persisted across requests
-- **Request Options**: Passed per-request, merged with configuration options
-- **Validation Timing**: Options validated after merge in transport layer
 
 ### Provider System
 
-Providers implement LLM service integrations and are format-agnostic:
+Providers implement LLM service integrations and handle protocol routing:
 
 ```go
 type Provider interface {
     Name() string
     BaseURL() string
-    Model() models.Model
-    GetEndpoint(protocol protocols.Protocol) (string, error)
-    PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error)
-    ProcessResponse(resp *http.Response, capability capabilities.Capability) (any, error)
+    Model() *types.Model
+
+    // Request preparation
+    GetEndpoint(protocol types.Protocol) (string, error)
+    PrepareRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error)
+    PrepareStreamRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error)
+
+    // Response processing
+    ProcessResponse(resp *http.Response, protocol types.Protocol) (any, error)
+    ProcessStreamResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (<-chan any, error)
+
+    // Authentication
+    SetHeaders(req *http.Request)
 }
 ```
 
 **Provider Responsibilities**:
 - **Endpoint Mapping**: Map protocols to provider-specific API endpoints
-- **Request Transformation**: Adapt protocol requests to provider API format
+- **Request Transformation**: Format requests for provider API
 - **Authentication**: Handle provider-specific authentication methods
-- **Response Processing**: Parse provider responses through capability handlers
+- **Response Parsing**: Parse provider responses using protocol-specific parsers
 
 **Implemented Providers**:
-- **Ollama**: Currently configured for OpenAI-compatible endpoints, but could support native Ollama format
+- **Ollama**: OpenAI-compatible endpoints via `/v1/*`
 - **Azure**: Azure AI Foundry with OpenAI format support
 
-**Provider Flexibility**: Providers can support any capability format:
+**Request Structure**:
 ```go
-// Example: Provider supporting multiple formats
-func (p *CustomProvider) PrepareRequest(ctx context.Context, protocol protocols.Protocol, request *protocols.Request) (*Request, error) {
-    // The capability has already formatted the request according to its format
-    // Provider just needs to route to correct endpoint and handle authentication
-    endpoint, err := p.GetEndpoint(protocol)
-    if err != nil {
-        return nil, err
-    }
-
-    // Provider-specific transformations if needed
-    return &Request{
-        URL:     endpoint,
-        Headers: p.getAuthHeaders(),
-        Body:    request.Marshal(), // Already formatted by capability
-    }, nil
+type Request struct {
+    URL     string
+    Headers map[string]string
+    Body    []byte
 }
 ```
 
-### Transport Layer
+### Client Layer
 
-The transport layer orchestrates request routing and execution:
+The client layer orchestrates request routing, retry logic, and execution:
 
 ```go
 type Client interface {
     Provider() providers.Provider
-    Model() models.Model
-    ExecuteProtocol(ctx context.Context, req *capabilities.CapabilityRequest) (any, error)
-    ExecuteProtocolStream(ctx context.Context, req *capabilities.CapabilityRequest) (<-chan protocols.StreamingChunk, error)
+    Model() *types.Model
+    HTTPClient() *http.Client
+    IsHealthy() bool
+
+    ExecuteProtocol(ctx context.Context, request types.ProtocolRequest) (any, error)
+    ExecuteProtocolStream(ctx context.Context, request types.ProtocolRequest) (<-chan *types.StreamingChunk, error)
 }
 ```
 
 **Request Flow**:
-1. **Protocol Selection**: Determine capability based on requested protocol
-2. **Capability Execution**: Use model format to select appropriate capability implementation
-3. **Request Preparation**: Transform request through capability-specific logic (formats to API structure)
-4. **Provider Routing**: Provider routes to appropriate endpoint and handles authentication
-5. **Response Processing**: Parse response through capability-specific handlers
+1. **Protocol Request**: Client receives protocol-specific request from agent
+2. **Request Preparation**: Provider marshals request and formats for its API
+3. **Retry Logic**: Exponential backoff with jitter for retryable errors
+4. **HTTP Execution**: Send request with provider authentication
+5. **Response Parsing**: Parse response using protocol-specific parsers
+6. **Health Tracking**: Update client health status based on results
+
+**Note**: Options pass through without merging. The agent adds the model name to options before creating the protocol request. Configuration options from JSON files are available via `Model.Options` but not automatically merged into requests.
+
+**Retry Configuration**:
+```go
+type RetryConfig struct {
+    MaxRetries        int
+    InitialBackoff    Duration
+    MaxBackoff        Duration
+    BackoffMultiplier float64
+    Jitter            bool
+}
+```
+
+**Retry Logic** (`client/retry.go`):
+- Exponential backoff: delay = initialBackoff * (multiplier ^ attempt)
+- Jitter: randomize delay by ±25% to prevent thundering herd
+- Retryable errors: HTTP 429, 502, 503, 504, network errors, DNS errors
+- Non-retryable: context cancellation, context deadline, HTTP 4xx (except 429)
 
 ### Agent System
 
@@ -269,22 +317,27 @@ Agents provide high-level orchestration with protocol-specific methods:
 ```go
 type Agent interface {
     ID() string
-    Client() transport.Client
+    Client() client.Client
     Provider() providers.Provider
-    Model() models.Model
+    Model() *types.Model
 
-    Chat(ctx context.Context, prompt string) (*protocols.ChatResponse, error)
-    ChatStream(ctx context.Context, prompt string) (<-chan protocols.StreamingChunk, error)
+    Chat(ctx context.Context, prompt string, opts ...map[string]any) (*types.ChatResponse, error)
+    ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan *types.StreamingChunk, error)
 
-    Vision(ctx context.Context, prompt string, images []string) (*protocols.ChatResponse, error)
-    VisionStream(ctx context.Context, prompt string, images []string) (<-chan protocols.StreamingChunk, error)
+    Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*types.ChatResponse, error)
+    VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan *types.StreamingChunk, error)
 
-    Tools(ctx context.Context, prompt string, tools []Tool) (*protocols.ChatResponse, error)
-    ToolsStream(ctx context.Context, prompt string, tools []Tool) (<-chan protocols.StreamingChunk, error)
+    Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*types.ToolsResponse, error)
 
-    Embed(ctx context.Context, input string) (*protocols.EmbeddingsResponse, error)
+    Embed(ctx context.Context, input string, opts ...map[string]any) (*types.EmbeddingsResponse, error)
 }
 ```
+
+**Agent Responsibilities**:
+- **Message Initialization**: Create message arrays with system prompt injection
+- **Protocol Execution**: Route to client's ExecuteProtocol methods
+- **Response Type Assertion**: Ensure correct response type for each protocol
+- **Streaming Management**: Handle streaming channels for supported protocols
 
 #### Agent Identification
 
@@ -309,33 +362,6 @@ Each agent has a unique identifier assigned at creation time that remains stable
 - **Distributed Tracing**: Correlate agent operations across service boundaries
 - **Observability**: Aggregate metrics and logs by agent ID
 
-**Example - Hub Registration**:
-```go
-// Create multiple agents
-agent1, _ := agent.New(config)
-agent2, _ := agent.New(config)
-
-// Register in hub using IDs
-hub.Register(agent1.ID(), agent1)
-hub.Register(agent2.ID(), agent2)
-
-// Route message to specific agent
-hub.SendTo(agent1.ID(), message)
-```
-
-**Example - Distributed Tracing**:
-```go
-agent, _ := agent.New(config)
-
-// Include agent ID in structured logs
-log.Info("agent processing request",
-    "agent_id", agent.ID(),
-    "request_id", requestID)
-
-// Correlate operations across service boundaries
-ctx = context.WithValue(ctx, "agent_id", agent.ID())
-```
-
 ## Configuration System
 
 ### Agent Configuration
@@ -344,7 +370,7 @@ ctx = context.WithValue(ctx, "agent_id", agent.ID())
 {
   "name": "agent-name",
   "system_prompt": "System instructions for the agent",
-  "transport": {
+  "client": {
     "provider": {
       "name": "ollama",
       "base_url": "http://localhost:11434",
@@ -352,32 +378,38 @@ ctx = context.WithValue(ctx, "agent_id", agent.ID())
         "name": "llama3.2:3b",
         "capabilities": {
           "chat": {
-            "format": "chat",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "top_p": 0.95
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "top_p": 0.95
           },
           "tools": {
-            "format": "tools",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "tool_choice": "auto"
           }
         }
       }
     },
     "timeout": "24s",
-    "max_retries": 3,
-    "retry_backoff_base": "1s",
+    "retry": {
+      "max_retries": 3,
+      "initial_backoff": "1s",
+      "max_backoff": "30s",
+      "backoff_multiplier": 2.0,
+      "jitter": true
+    },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
   }
 }
 ```
+
+**Configuration Hierarchy**:
+- `AgentConfig`: Top-level agent configuration
+- `ClientConfig`: Client configuration with retry settings
+- `ProviderConfig`: Provider details and model configuration
+- `ModelConfig`: Model name and protocol-specific capabilities
+- `RetryConfig`: Retry behavior configuration
 
 **Duration Format**: Supports human-readable strings ("24s", "1m", "2h") or numeric nanoseconds:
 ```go
@@ -389,20 +421,21 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 }
 ```
 
-### Composable Capabilities
+### Protocol Configuration
 
-Each protocol is configured independently with its own capability format and options:
+Each protocol is configured independently with its own options:
 
 **Per-Protocol Configuration**:
 ```json
 "capabilities": {
   "chat": {
-    "format": "chat",
-    "options": {"temperature": 0.7, "top_p": 0.95}
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_tokens": 4096
   },
   "tools": {
-    "format": "tools",
-    "options": {"tool_choice": "auto"}
+    "temperature": 0.7,
+    "tool_choice": "auto"
   }
 }
 ```
@@ -410,21 +443,46 @@ Each protocol is configured independently with its own capability format and opt
 **Benefits**:
 - **Option Isolation**: Each protocol has its own options (no conflicts)
 - **Selective Support**: Models declare only supported protocols
-- **Format Flexibility**: Different protocols can use different formats
-- **Runtime Updates**: Protocol options can be updated on live agents
+- **Runtime Merging**: Request options override model defaults
 
-### Provider-Capability Compatibility
+### Configuration vs Domain Types
 
-Providers work with any capability format that matches their API endpoints:
+**Separation Principle**: Configuration structures use string keys for JSON serialization, while domain types use Protocol constants for type safety.
 
-**Current Compatibility**:
-- **Ollama Provider**: Supports OpenAI-format capabilities via `/v1/*` endpoints
-- **Azure Provider**: Native OpenAI API compatibility
+**Configuration Type** (`config.ModelConfig`):
+```go
+type ModelConfig struct {
+    Name         string
+    Capabilities map[string]map[string]any  // String keys for JSON
+}
+```
 
-**Future Extensibility**:
-- **Ollama Provider**: Could add native format support via `/api/*` endpoints
-- **Anthropic Provider**: Would support Anthropic-format capabilities
-- **Universal Provider**: Could detect and route to appropriate endpoints based on capability format
+**Domain Type** (`types.Model`):
+```go
+type Model struct {
+    Name    string
+    Options map[Protocol]map[string]any  // Protocol constants for type safety
+}
+```
+
+**Conversion** (`types.FromConfig`):
+```go
+func FromConfig(cfg *config.ModelConfig) *Model {
+    model := &Model{
+        Name:    cfg.Name,
+        Options: make(map[Protocol]map[string]any),
+    }
+
+    for key, opts := range cfg.Capabilities {
+        protocol := Protocol(key)
+        if protocol.IsValid() {
+            model.Options[protocol] = opts
+        }
+    }
+
+    return model
+}
+```
 
 ## Data Flow
 
@@ -433,83 +491,173 @@ Providers work with any capability format that matches their API endpoints:
 ```
 Agent.Chat(prompt, options)
   ↓
-Transport.ExecuteProtocol(protocol, messages, options)
+Agent creates ChatRequest{Messages, Options}  // Options includes model name
   ↓
-Model.MergeRequestOptions(protocol, options)  // Merge config + request options
+Client.ExecuteProtocol(request)
   ↓
-Capability.ValidateOptions(merged_options)    // Validate after merge
+Provider.PrepareRequest(request)  // Marshal and format for API
   ↓
-Capability.CreateRequest(messages, merged_options)  // Format to API structure
+HTTP Request with Retry Logic
   ↓
-Provider.PrepareRequest(protocol, request)    // Route to endpoint + auth
+Provider.ProcessResponse(response, request.GetProtocol())
   ↓
-HTTP Request → Response
+types.ParseChatResponse(body)  // Parse protocol-specific response
   ↓
-Provider.ProcessResponse(response, capability)
-  ↓
-Capability.ParseResponse(data)  // Parse API-specific response
-  ↓
-Agent returns typed response
+Agent returns *types.ChatResponse
 ```
 
-### Capability-Protocol Flow
+### Streaming Request Flow
 
 ```
-Configuration: {"chat": {"format": "chat", "options": {...}}}
+Agent.ChatStream(prompt, options)
   ↓
-Model creates ProtocolHandler(ChatCapability, options)
+Agent creates ChatRequest{Messages, Options}
+options["stream"] = true  // Add streaming flag
   ↓
-Request arrives with per-request options
+Client.ExecuteProtocolStream(request)
   ↓
-Merged options = config options + request options
+request.GetProtocol().SupportsStreaming() check
   ↓
-Chat Capability formats to OpenAI-compatible API structure
+Provider.PrepareStreamRequest(request)  // Marshal with streaming headers
   ↓
-Ollama Provider routes to /v1/chat/completions endpoint
+HTTP Streaming Request (no retry)
+  ↓
+Provider.ProcessStreamResponse(response, request.GetProtocol())
+  ↓
+Channel of types.StreamingChunk
+  ↓
+Agent streams chunks to caller
 ```
+
+### Option Pass-Through Flow
+
+```
+Configuration: {"chat": {"temperature": 0.7, "max_tokens": 4096}}
+  ↓
+Model created with Options[types.Chat] = {"temperature": 0.7, "max_tokens": 4096}
+  ↓
+Agent.Chat(prompt, {"temperature": 0.9})
+  ↓
+Agent creates options = {"model": "llama3.2:3b", "temperature": 0.9}
+  ↓
+ChatRequest{Messages, Options: {"model": "...", "temperature": 0.9}}
+  ↓
+Provider.PrepareRequest marshals request with provided options
+  ↓
+HTTP request body: {"messages": [...], "model": "...", "temperature": 0.9}
+```
+
+**Note**: Configuration options are stored in `Model.Options` but not automatically merged. Callers provide all desired options in agent method calls. The agent only adds the model name to the options map.
 
 ## Design Patterns
 
-### Format-Agnostic Provider Design
+### Protocol-Centric Architecture
 
-Providers don't assume any specific API format - they work with whatever format the capabilities produce:
+Protocols are the primary abstraction, eliminating the need for a separate capability layer:
+
+**Benefits**:
+- Simpler architecture with fewer layers
+- Direct protocol-to-parser mapping
+- Clear protocol support via `Protocol.IsValid()` and `Protocol.SupportsStreaming()`
+- Protocol constants prevent typos and enable compile-time validation
+
+### Configuration Lifecycle
+
+Configuration only exists during initialization:
 
 ```go
-// Provider doesn't know or care about API format
-func (p *GenericProvider) ProcessResponse(resp *http.Response, capability capabilities.Capability) (any, error) {
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return nil, err
-    }
+// Load configuration
+cfg, _ := config.LoadAgentConfig("config.json")
 
-    // Capability knows how to parse its specific format
-    return capability.ParseResponse(body)
+// Create agent (config transforms to domain types)
+agent, _ := agent.New(cfg)
+
+// Runtime uses domain types (types.Model, types.Protocol)
+// Configuration is no longer referenced
+```
+
+**Rationale**: Prevents configuration infrastructure from persisting too deeply into package layers, maintaining clear separation between initialization and runtime.
+
+### Interface-Based Layer Interconnection
+
+Layers communicate through interfaces, not concrete types:
+
+```go
+// Agent depends on client interface
+type Agent interface {
+    Client() client.Client  // Returns interface, not concrete type
+}
+
+// Client depends on provider interface
+type Client interface {
+    Provider() providers.Provider  // Returns interface
 }
 ```
 
-### Capability-Format Coupling
+**Benefits**:
+- Loose coupling between layers
+- Testing through mocks
+- Multiple implementations possible
+- Clear contracts between components
 
-Capabilities are tightly coupled to specific API formats, enabling:
-- **Format Specialization**: Each capability optimized for its target API
-- **Provider Independence**: Same capability works with any compatible provider
-- **Extension Flexibility**: New formats can be added without changing providers
+### Retry Pattern
 
-### Configuration-Driven Composition
+Intelligent retry with exponential backoff and jitter:
 
-Model capabilities are composed from registered formats:
-- **Capability Configuration**: Each protocol specifies its format and options
-- **Protocol Isolation**: Options are validated and managed per-protocol
-- **Provider Routing**: Providers route requests based on protocol and endpoint compatibility
-- **Runtime Flexibility**: Protocol options can be updated on live models
+```go
+func isRetryableError(err error) bool {
+    // Context cancellation/deadline: not retryable
+    if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+        return false
+    }
+
+    // HTTP status codes
+    var httpErr *HTTPStatusError
+    if errors.As(err, &httpErr) {
+        return httpErr.StatusCode == 429 ||  // Rate limit
+               httpErr.StatusCode == 502 ||  // Bad gateway
+               httpErr.StatusCode == 503 ||  // Service unavailable
+               httpErr.StatusCode == 504     // Gateway timeout
+    }
+
+    // Network and DNS errors: retryable
+    return true
+}
+```
+
+**Retry Strategy**:
+```go
+func doWithRetry[T any](
+    ctx context.Context,
+    cfg config.RetryConfig,
+    operation func() (T, error),
+) (T, error) {
+    backoff := cfg.InitialBackoff.ToDuration()
+
+    for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
+        result, err := operation()
+
+        if err == nil || !isRetryableError(err) {
+            return result, err
+        }
+
+        if attempt < cfg.MaxRetries {
+            delay := calculateDelay(backoff, cfg)
+            time.Sleep(delay)
+            backoff *= time.Duration(cfg.BackoffMultiplier)
+        }
+    }
+}
+```
 
 ## Extension Points
 
 ### Adding New Providers
 
 1. Implement `Provider` interface with endpoint mapping and authentication
-2. Ensure compatibility with desired capability formats
+2. Implement protocol-specific parsers in `ProcessResponse`
 3. Register in provider registry
-4. Works with any capability format - just needs compatible endpoints
+4. Configure in JSON
 
 Example:
 ```go
@@ -517,68 +665,65 @@ type CustomProvider struct {
     *BaseProvider
 }
 
-func (p *CustomProvider) GetEndpoint(protocol protocols.Protocol) (string, error) {
-    // Map protocols to provider-specific endpoints
-    endpoints := map[protocols.Protocol]string{
-        protocols.Chat:   "/v1/chat/completions",
-        protocols.Vision: "/v1/chat/completions",
-        protocols.Tools:  "/v1/chat/completions",
+func (p *CustomProvider) GetEndpoint(protocol types.Protocol) (string, error) {
+    endpoints := map[types.Protocol]string{
+        types.Chat:       "/v1/chat/completions",
+        types.Vision:     "/v1/chat/completions",
+        types.Tools:      "/v1/chat/completions",
+        types.Embeddings: "/v1/embeddings",
     }
-    return p.BaseURL() + endpoints[protocol], nil
+    endpoint, ok := endpoints[protocol]
+    if !ok {
+        return "", fmt.Errorf("protocol %s not supported", protocol)
+    }
+    return p.BaseURL() + endpoint, nil
+}
+
+func (p *CustomProvider) ProcessResponse(resp *http.Response, protocol types.Protocol) (any, error) {
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    return types.ParseResponse(protocol, body)
 }
 ```
 
-### Adding New Capability Formats
+### Adding New Protocols
 
-1. Implement `Capability` interface for the new format
-2. Define protocol-specific options and validation
-3. Register format in capability registry using `init()`
-4. Use in model configuration
+1. Add protocol constant to `types/protocol.go`
+2. Implement request/response types in `types/<protocol>.go`
+3. Implement `Parse<Protocol>Response` function
+4. If streaming supported, implement `Parse<Protocol>StreamChunk`
+5. Update `Protocol.IsValid()` and `Protocol.SupportsStreaming()`
+6. Update providers to support new protocol endpoint
 
 Example:
 ```go
-func init() {
-    RegisterFormat("anthropic-chat", func() Capability {
-        return NewAnthropicChatCapability()
-    })
+// types/protocol.go
+const (
+    Chat       Protocol = "chat"
+    Vision     Protocol = "vision"
+    Tools      Protocol = "tools"
+    Embeddings Protocol = "embeddings"
+    Audio      Protocol = "audio"  // New protocol
+)
+
+// types/audio.go
+type AudioResponse struct {
+    Model   string
+    Audio   []byte
+    Format  string
+    Usage   *TokenUsage
 }
-```
 
-Configuration:
-```json
-"capabilities": {
-  "chat": {
-    "format": "anthropic-chat",
-    "options": {"max_tokens": 4096}
-  }
-}
-```
-
-### Multi-Protocol Configuration
-
-Models can compose capabilities from different formats:
-
-```json
-"model": {
-  "name": "multi-capability-model",
-  "capabilities": {
-    "chat": {
-      "format": "chat",
-      "options": {"temperature": 0.7}
-    },
-    "tools": {
-      "format": "custom-tools",
-      "options": {"execution_mode": "sandbox"}
-    },
-    "embeddings": {
-      "format": "embeddings",
-      "options": {"dimensions": 1536}
+func ParseAudioResponse(data []byte) (*AudioResponse, error) {
+    var resp AudioResponse
+    if err := json.Unmarshal(data, &resp); err != nil {
+        return nil, err
     }
-  }
+    return &resp, nil
 }
 ```
-
-The architecture provides complete separation between API formats (handled by capabilities), protocol configuration (handled by models), and service integration (handled by providers), enabling maximum flexibility for supporting diverse LLM services and API standards.
 
 ## Testing Strategy
 
@@ -593,18 +738,16 @@ tests/
 │   ├── options_test.go
 │   ├── model_test.go
 │   ├── provider_test.go
-│   ├── transport_test.go
+│   ├── client_test.go
 │   └── agent_test.go
-├── protocols/
+├── types/
 │   └── protocol_test.go
-├── capabilities/
-│   └── ...
+├── client/
+│   └── client_test.go
 ├── mock/
 │   ├── agent_test.go
 │   ├── client_test.go
 │   ├── provider_test.go
-│   ├── model_test.go
-│   ├── capability_test.go
 │   └── helpers_test.go
 └── ...
 ```
@@ -636,19 +779,21 @@ import (
 **Table-Driven Tests**: Used for testing multiple scenarios with different inputs:
 
 ```go
-func TestDuration_UnmarshalJSON(t *testing.T) {
+func TestProtocol_IsValid(t *testing.T) {
     tests := []struct {
         name     string
-        input    string
-        expected time.Duration
+        protocol types.Protocol
+        expected bool
     }{
-        {name: "seconds", input: `"24s"`, expected: 24 * time.Second},
-        {name: "minutes", input: `"1m"`, expected: 1 * time.Minute},
+        {name: "chat", protocol: types.Chat, expected: true},
+        {name: "invalid", protocol: types.Protocol("invalid"), expected: false},
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            // test implementation
+            if got := tt.protocol.IsValid(); got != tt.expected {
+                t.Errorf("got %v, want %v", got, tt.expected)
+            }
         })
     }
 }
@@ -657,14 +802,27 @@ func TestDuration_UnmarshalJSON(t *testing.T) {
 **HTTP Mocking**: Use `httptest.Server` for mocking provider responses:
 
 ```go
-func TestProvider_Request(t *testing.T) {
+func TestClient_ExecuteProtocol_Chat(t *testing.T) {
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // mock response
-        json.NewEncoder(w).Encode(mockResponse)
+        response := types.ChatResponse{
+            Model: "test-model",
+            Choices: []struct {
+                Index        int
+                Message      types.Message
+                FinishReason string
+            }{
+                {
+                    Index:   0,
+                    Message: types.NewMessage("assistant", "Test response"),
+                },
+            },
+        }
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(response)
     }))
     defer server.Close()
 
-    // test with server.URL
+    // Test with server.URL
 }
 ```
 
@@ -673,10 +831,10 @@ func TestProvider_Request(t *testing.T) {
 **Minimum Coverage**: 80% across all packages
 
 **Critical Path Coverage**: 100% for:
-- Request/response parsing (protocols package)
+- Request/response parsing (types package)
+- Protocol request marshaling (types.*Request.Marshal)
 - Configuration validation (config package)
-- Protocol routing (transport package)
-- Option merging and validation (models, transport)
+- Protocol routing (client package)
 
 **Coverage Commands**:
 ```bash
@@ -705,6 +863,12 @@ go run tools/prompt-agent/main.go \
   -config tools/prompt-agent/config.ollama.json \
   -prompt "Test prompt"
 
+# Test streaming
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.ollama.json \
+  -prompt "Test prompt" \
+  -stream
+
 # Test Azure integration
 go run tools/prompt-agent/main.go \
   -config tools/prompt-agent/config.azure.json \
@@ -722,7 +886,7 @@ go run tools/prompt-agent/main.go \
 **When to Run Validation**:
 - Before releases
 - After provider-specific changes
-- When adding new capability formats
+- When adding new protocols
 - To verify configuration changes
 
 ### Mock Package
@@ -736,8 +900,6 @@ pkg/mock/
 ├── agent.go         # MockAgent implementation
 ├── client.go        # MockClient implementation
 ├── provider.go      # MockProvider implementation
-├── model.go         # MockModel implementation
-├── capability.go    # MockCapability implementation
 └── helpers.go       # Convenience constructors
 ```
 
@@ -750,7 +912,7 @@ pkg/mock/
    - Options: `WithID`, `WithChatResponse`, `WithVisionResponse`, `WithToolsResponse`, `WithEmbeddingsResponse`, `WithStreamChunks`
 
 2. **MockClient** (`client.go`)
-   - Implements: `transport.Client`
+   - Implements: `client.Client`
    - Configurable protocol execution and streaming
    - Health status management
    - Options: `WithExecuteResponse`, `WithStreamResponse`, `WithHealthy`, `WithHTTPClient`
@@ -760,17 +922,6 @@ pkg/mock/
    - Custom endpoint mapping per protocol
    - Request preparation and response processing
    - Options: `WithBaseURL`, `WithEndpointMapping`, `WithPrepareResponse`, `WithProcessResponse`
-
-4. **MockModel** (`model.go`)
-   - Implements: `models.Model`
-   - Configurable protocol support
-   - Capability management per protocol
-   - Options: `WithSupportedProtocols`, `WithProtocolCapability`, `WithProtocolOptions`
-
-5. **MockCapability** (`capability.go`)
-   - Implements: `capabilities.Capability` and `capabilities.StreamingCapability`
-   - Configurable validation, processing, and parsing
-   - Options: `WithValidateError`, `WithProcessedOptions`, `WithParseResponse`
 
 **Helper Constructors** (`helpers.go`):
 
@@ -784,7 +935,7 @@ agent := mock.NewSimpleChatAgent("id", "response text")
 agent := mock.NewStreamingChatAgent("id", []string{"chunk1", "chunk2"})
 
 // Tools agent
-agent := mock.NewToolsAgent("id", []protocols.ToolCall{...})
+agent := mock.NewToolsAgent("id", []types.ToolCall{...})
 
 // Embeddings agent
 agent := mock.NewEmbeddingsAgent("id", []float64{0.1, 0.2, 0.3})
@@ -804,8 +955,8 @@ The option pattern allows precise control over mock behavior:
 // Configure specific behaviors
 mockAgent := mock.NewMockAgent(
     mock.WithID("custom-id"),
-    mock.WithChatResponse(&protocols.ChatResponse{...}, nil),
-    mock.WithStreamChunks([]protocols.StreamingChunk{...}, nil),
+    mock.WithChatResponse(&types.ChatResponse{...}, nil),
+    mock.WithStreamChunks([]types.StreamingChunk{...}, nil),
 )
 
 // Test error handling
@@ -814,8 +965,6 @@ failingAgent := mock.NewMockAgent(
     mock.WithChatResponse(nil, errors.New("connection failed")),
 )
 ```
-
-**Test Coverage**: The mock package has 86.8% test coverage with comprehensive tests in `tests/mock/`.
 
 **Use Cases**:
 - Testing orchestration systems without live LLM calls

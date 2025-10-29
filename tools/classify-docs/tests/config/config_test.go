@@ -4,33 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	acfg "github.com/JaimeStill/go-agents/pkg/config"
 	"github.com/JaimeStill/go-agents/tools/classify-docs/pkg/config"
 )
 
 func TestDefaultConfigs(t *testing.T) {
-	t.Run("DefaultRetryConfig", func(t *testing.T) {
-		cfg := config.DefaultRetryConfig()
-
-		if cfg.MaxAttempts != 5 {
-			t.Errorf("expected MaxAttempts=5, got %d", cfg.MaxAttempts)
-		}
-
-		if cfg.InitialBackoff.ToDuration() != 20*time.Second {
-			t.Errorf("expected InitialBackoff=20s, got %v", cfg.InitialBackoff.ToDuration())
-		}
-
-		if cfg.MaxBackoff.ToDuration() != 90*time.Second {
-			t.Errorf("expected MaxBackoff=90s, got %v", cfg.MaxBackoff.ToDuration())
-		}
-
-		if cfg.BackoffMultiplier != 1.5 {
-			t.Errorf("expected BackoffMultiplier=1.5, got %v", cfg.BackoffMultiplier)
-		}
-	})
-
 	t.Run("DefaultSequentialConfig", func(t *testing.T) {
 		cfg := config.DefaultSequentialConfig()
 
@@ -87,12 +66,6 @@ func TestLoadClassifyConfig(t *testing.T) {
 		t.Errorf("expected cache path '.cache/custom.json', got %s",
 			loaded.Processing.Cache.Path)
 	}
-
-	// Verify defaults for unspecified values
-	if loaded.Processing.Retry.MaxAttempts != 5 {
-		t.Errorf("expected default MaxAttempts=5, got %d",
-			loaded.Processing.Retry.MaxAttempts)
-	}
 }
 
 func TestLoadClassifyConfig_NonexistentFile(t *testing.T) {
@@ -117,11 +90,5 @@ func TestClassifyConfig_Merge(t *testing.T) {
 	// Check merged values
 	if base.Agent.Name != "override-agent" {
 		t.Errorf("expected merged name 'override-agent', got %s", base.Agent.Name)
-	}
-
-	// Check that unspecified values retain defaults
-	if base.Processing.Retry.MaxAttempts != 5 {
-		t.Errorf("expected default MaxAttempts=5, got %d",
-			base.Processing.Retry.MaxAttempts)
 	}
 }

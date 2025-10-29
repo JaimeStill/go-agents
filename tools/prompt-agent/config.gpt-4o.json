@@ -1,7 +1,7 @@
 {
   "name": "azure-gpt4-agent",
   "system_prompt": "You are an expert at analyzing and understanding the content of documents",
-  "transport": {
+  "client": {
     "provider": {
       "name": "azure",
       "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -9,28 +9,19 @@
         "name": "gpt-4o",
         "capabilities": {
           "chat": {
-            "format": "chat",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "top_p": 0.95
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "top_p": 0.95
           },
           "vision": {
-            "format": "vision",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "detail": "high"
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "detail": "high"
           },
           "tools": {
-            "format": "tools",
-            "options": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "tool_choice": "auto"
           }
         }
       },
@@ -41,8 +32,13 @@
       }
     },
     "timeout": "24s",
-    "max_retries": 3,
-    "retry_backoff_base": "1s",
+    "retry": {
+      "max_retries": 3,
+      "initial_backoff": "1s",
+      "max_backoff": "30s",
+      "backoff_multiplier": 2.0,
+      "jitter": true
+    },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
   }

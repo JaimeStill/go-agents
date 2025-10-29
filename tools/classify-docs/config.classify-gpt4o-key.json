@@ -1,7 +1,7 @@
 {
   "agent": {
     "name": "classify-agent-gpt4o",
-    "transport": {
+    "client": {
       "provider": {
         "name": "azure",
         "base_url": "https://go-agents-platform.openai.azure.com/openai",
@@ -9,10 +9,9 @@
           "name": "gpt-4o",
           "capabilities": {
             "vision": {
-              "format": "vision",
-              "options": {
-                "max_tokens": 4096,
-                "temperature": 0.1,
+              "max_tokens": 4096,
+              "temperature": 0.1,
+              "image_options": {
                 "detail": "high"
               }
             }

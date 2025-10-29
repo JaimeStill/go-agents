@@ -2,21 +2,18 @@ package config
 
 type ProcessingConfig struct {
 	Sequential SequentialConfig `json:"sequential"`
-	Retry      RetryConfig      `json:"retry"`
 	Cache      CacheConfig      `json:"cache"`
 }
 
 func DefaultProcessingConfig() ProcessingConfig {
 	return ProcessingConfig{
 		Sequential: DefaultSequentialConfig(),
-		Retry:      DefaultRetryConfig(),
 		Cache:      DefaultCacheConfig(),
 	}
 }
 
 func (c *ProcessingConfig) Merge(source *ProcessingConfig) {
 	c.Sequential.Merge(&source.Sequential)
-	c.Retry.Merge(&source.Retry)
 	c.Cache.Merge(&source.Cache)
 }
 
