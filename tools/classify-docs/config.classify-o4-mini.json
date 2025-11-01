@@ -9,9 +9,9 @@
           "name": "o4-mini",
           "capabilities": {
             "vision": {
+              "reasoning_effort": "high",
               "vision_options": {
-                "detail": "high",
-                "reasoning_effort": "high"
+                "detail": "high"
               }
             }
           }
