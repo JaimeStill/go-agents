@@ -89,12 +89,12 @@ type ChatRequest struct {
     Options  map[string]any
 }
 
-// Vision protocol request - separates images and image options from model options
+// Vision protocol request - separates images and vision-specific options from model options
 type VisionRequest struct {
-    Messages     []Message
-    Images       []string            // URLs or data URIs
-    ImageOptions map[string]any      // Options for image_url (e.g., detail: "high")
-    Options      map[string]any      // Model configuration options
+    Messages      []Message
+    Images        []string            // URLs or data URIs
+    VisionOptions map[string]any      // Vision-specific options (e.g., detail: "high")
+    Options       map[string]any      // Model configuration options
 }
 
 // Tools protocol request - separates tool definitions from model options
@@ -192,17 +192,18 @@ Models store the model name and protocol-specific options from configuration:
 ```go
 type Model struct {
     Name    string
-    Options map[Protocol]map[string]any  // Loaded from config, not merged at runtime
+    Options map[Protocol]map[string]any  // Protocol-specific options from config
 }
 ```
 
-**Design Philosophy**: Options are passed through without runtime merging. The `Options` map stores configuration from JSON files but is not actively used during request execution. This simplifies the architecture:
+**Design Philosophy**: Options are merged at the agent layer, combining model's configured options with runtime overrides. The `Options` map stores protocol-specific configurations from JSON files, which serve as defaults that can be overridden at runtime.
 
-- **Agent layer**: Adds model name to options and creates protocol-specific requests
-- **No merging**: Request options pass through as-is
-- **Configuration**: Options from config files are available via `Model.Options` but not automatically merged
+- **Agent layer**: Merges model's configured protocol options with runtime options, adds model name
+- **Runtime override**: Call-time options override model defaults
+- **Protocol-specific extraction**: Vision protocol extracts `vision_options` from merged options
+- **Configuration**: Options from config files provide baseline behavior
 
-**Rationale**: The consolidated architecture eliminated runtime option merging to simplify the request flow. Protocol-specific options are configured in JSON files and passed through agent method calls, keeping the pipeline straightforward.
+**Rationale**: Option merging allows model configurations to define sensible defaults while enabling runtime customization per request. This balances configuration convenience with runtime flexibility.
 
 **Model Creation**: Convert configuration to runtime model:
 ```go
@@ -223,6 +224,106 @@ func FromConfig(cfg *config.ModelConfig) *Model {
     return model
 }
 ```
+
+### Configuration Option Merging
+
+Agent methods merge model's configured protocol options with runtime options, providing baseline defaults that can be overridden per request.
+
+**Merging Pattern**: All agent protocol methods follow this standard pattern:
+
+```go
+func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*types.ChatResponse, error) {
+    messages := a.initMessages(prompt)
+
+    // 1. Start with model's configured protocol options
+    options := make(map[string]any)
+    if modelOpts := a.client.Model().Options[types.Chat]; modelOpts != nil {
+        maps.Copy(options, modelOpts)
+    }
+
+    // 2. Merge/override with runtime opts
+    if len(opts) > 0 && opts[0] != nil {
+        maps.Copy(options, opts[0])
+    }
+
+    // 3. Add model name
+    options["model"] = a.client.Model().Name
+
+    request := &types.ChatRequest{
+        Messages: messages,
+        Options:  options,
+    }
+
+    result, err := a.client.ExecuteProtocol(ctx, request)
+    // ... rest of method
+}
+```
+
+**Vision Protocol Special Handling**: Vision methods extract `vision_options` after merging:
+
+```go
+func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*types.ChatResponse, error) {
+    messages := a.initMessages(prompt)
+
+    // 1. Start with model's configured vision options
+    options := make(map[string]any)
+    if modelOpts := a.client.Model().Options[types.Vision]; modelOpts != nil {
+        maps.Copy(options, modelOpts)
+    }
+
+    // 2. Merge/override with runtime opts
+    if len(opts) > 0 && opts[0] != nil {
+        maps.Copy(options, opts[0])
+    }
+
+    // 3. Extract vision_options (protocol-specific options)
+    var visionOptions map[string]any
+    if vOpts, exists := options["vision_options"]; exists {
+        if vOptsMap, ok := vOpts.(map[string]any); ok {
+            visionOptions = vOptsMap
+            delete(options, "vision_options")  // Remove from main options
+        }
+    }
+
+    // 4. Add model name
+    options["model"] = a.client.Model().Name
+
+    request := &types.VisionRequest{
+        Messages:      messages,
+        Images:        images,
+        VisionOptions: visionOptions,  // Separate field for vision-specific options
+        Options:       options,         // Model configuration options
+    }
+
+    result, err := a.client.ExecuteProtocol(ctx, request)
+    // ... rest of method
+}
+```
+
+**Merging Behavior**:
+
+1. **Base Options**: Starts with model's configured protocol options from `Model.Options[protocol]`
+2. **Runtime Override**: Runtime options override matching keys from configuration
+3. **Protocol-Specific Extraction**: Vision extracts `vision_options` nested map
+4. **Model Name**: Always added to ensure request includes target model
+
+**Example Merging Flow**:
+
+```
+Configuration: {"vision": {"max_tokens": 4096, "temperature": 0.7, "vision_options": {"detail": "high"}}}
+  ↓
+Runtime call: Vision(ctx, prompt, images, map[string]any{"temperature": 0.9})
+  ↓
+After merging: {"max_tokens": 4096, "temperature": 0.9, "vision_options": {"detail": "high"}}
+  ↓
+After extraction:
+  - VisionOptions: {"detail": "high"}
+  - Options: {"max_tokens": 4096, "temperature": 0.9, "model": "gpt-4o"}
+```
+
+**Why Vision Needs Special Handling**:
+
+Vision's `detail` parameter controls image rendering behavior (e.g., "low", "high", "auto"), which is protocol-specific rather than a model inference parameter. Other protocols like tools don't need this separation because their parameters (e.g., `tool_choice`) are regular model options that apply to inference behavior.
 
 ### Provider System
 
@@ -291,7 +392,7 @@ type Client interface {
 5. **Response Parsing**: Parse response using protocol-specific parsers
 6. **Health Tracking**: Update client health status based on results
 
-**Note**: Options pass through without merging. The agent adds the model name to options before creating the protocol request. Configuration options from JSON files are available via `Model.Options` but not automatically merged into requests.
+**Note**: Agent methods merge model's configured protocol options with runtime options before creating protocol requests. The client receives fully-formed requests with merged options and routes them to the appropriate provider.
 
 **Retry Configuration**:
 ```go
@@ -433,6 +534,13 @@ Each protocol is configured independently with its own options:
     "top_p": 0.95,
     "max_tokens": 4096
   },
+  "vision": {
+    "temperature": 0.7,
+    "max_tokens": 4096,
+    "vision_options": {
+      "detail": "high"
+    }
+  },
   "tools": {
     "temperature": 0.7,
     "tool_choice": "auto"
@@ -444,6 +552,7 @@ Each protocol is configured independently with its own options:
 - **Option Isolation**: Each protocol has its own options (no conflicts)
 - **Selective Support**: Models declare only supported protocols
 - **Runtime Merging**: Request options override model defaults
+- **Protocol-Specific Options**: Vision uses `vision_options` nested map for protocol-specific parameters like `detail`
 
 ### Configuration vs Domain Types
 
@@ -529,7 +638,7 @@ Channel of types.StreamingChunk
 Agent streams chunks to caller
 ```
 
-### Option Pass-Through Flow
+### Option Merging Flow
 
 ```
 Configuration: {"chat": {"temperature": 0.7, "max_tokens": 4096}}
@@ -538,16 +647,17 @@ Model created with Options[types.Chat] = {"temperature": 0.7, "max_tokens": 4096
   ↓
 Agent.Chat(prompt, {"temperature": 0.9})
   ↓
-Agent creates options = {"model": "llama3.2:3b", "temperature": 0.9}
+Agent merges: config options + runtime override + model name
+  = {"temperature": 0.9, "max_tokens": 4096, "model": "llama3.2:3b"}
   ↓
-ChatRequest{Messages, Options: {"model": "...", "temperature": 0.9}}
+ChatRequest{Messages, Options: {"temperature": 0.9, "max_tokens": 4096, "model": "..."}}
   ↓
-Provider.PrepareRequest marshals request with provided options
+Provider.PrepareRequest marshals request with merged options
   ↓
-HTTP request body: {"messages": [...], "model": "...", "temperature": 0.9}
+HTTP request body: {"messages": [...], "temperature": 0.9, "max_tokens": 4096, "model": "..."}
 ```
 
-**Note**: Configuration options are stored in `Model.Options` but not automatically merged. Callers provide all desired options in agent method calls. The agent only adds the model name to the options map.
+**Note**: Agent methods merge model's configured protocol options with runtime options. Runtime options override configuration values for matching keys. The agent adds the model name last to ensure it's always included.
 
 ## Design Patterns
 

@@ -10,7 +10,7 @@
           "capabilities": {
             "vision": {
               "temperature": 0.1,
-              "image_options": {
+              "vision_options": {
                 "detail": "high"
               }
             }

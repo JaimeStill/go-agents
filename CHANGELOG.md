@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.2.1] - 2025-11-01
+
+**Changed**:
+- `types.VisionRequest.ImageOptions` renamed to `VisionOptions` for protocol naming consistency
+- Vision protocol configuration format now uses nested `vision_options` map instead of flat `detail` key (breaking configuration change)
+- Agent protocol methods now merge model's configured options with runtime options, enabling configuration defaults with runtime overrides
+
+**Fixed**:
+- Agent methods now properly apply model's configured protocol options as baseline values
+
 ## [v0.2.0] - 2025-10-29
 
 **Breaking Changes**:

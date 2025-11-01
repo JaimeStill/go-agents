@@ -11,7 +11,7 @@
             "vision": {
               "max_tokens": 4096,
               "temperature": 0.1,
-              "image_options": {
+              "vision_options": {
                 "detail": "high"
               }
             }

@@ -107,17 +107,24 @@ func (a *agent) Model() *types.Model {
 
 // Chat executes a chat protocol request.
 // Initializes messages with system prompt (if configured) and user prompt.
+// Merges model's configured chat options with runtime opts.
 // Creates a ChatRequest and passes it to the client.
 // Returns parsed ChatResponse or error.
 func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*types.ChatResponse, error) {
 	messages := a.initMessages(prompt)
 
+	// Start with model's configured chat options
 	options := make(map[string]any)
-	if len(opts) > 0 && opts[0] != nil {
-		options = opts[0]
+	if modelOpts := a.client.Model().Options[types.Chat]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
 	}
 
-	// Add model name to options
+	// Merge/override with runtime opts
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
+
+	// Add model name
 	options["model"] = a.client.Model().Name
 
 	request := &types.ChatRequest{
@@ -139,17 +146,24 @@ func (a *agent) Chat(ctx context.Context, prompt string, opts ...map[string]any)
 }
 
 // ChatStream executes a streaming chat protocol request.
+// Merges model's configured chat options with runtime opts.
 // Automatically sets stream: true in options.
 // Returns a channel of StreamingChunk or error.
 func (a *agent) ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan *types.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
+	// Start with model's configured chat options
 	options := make(map[string]any)
-	if len(opts) > 0 && opts[0] != nil {
-		options = opts[0]
+	if modelOpts := a.client.Model().Options[types.Chat]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
 	}
 
-	// Add model name and streaming flag to options
+	// Merge/override with runtime opts
+	if len(opts) > 0 && opts[0] != nil {
+		maps.Copy(options, opts[0])
+	}
+
+	// Add model name and streaming flag
 	options["model"] = a.client.Model().Name
 	options["stream"] = true
 
@@ -163,39 +177,40 @@ func (a *agent) ChatStream(ctx context.Context, prompt string, opts ...map[strin
 
 // Vision executes a vision protocol request with images.
 // Images can be URLs or base64-encoded data URIs.
-// Extracts image_options from opts if present, separating them from model options.
+// Merges model's configured vision options with runtime opts.
+// Extracts vision_options from opts if present, separating them from model options.
 // Returns parsed ChatResponse or error.
 func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*types.ChatResponse, error) {
 	messages := a.initMessages(prompt)
 
+	// Start with model's configured vision options
 	options := make(map[string]any)
-	var imageOptions map[string]any
+	if modelOpts := a.client.Model().Options[types.Vision]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
+	}
 
+	// Merge/override with runtime opts
 	if len(opts) > 0 && opts[0] != nil {
-		// Extract image_options if present
-		if imgOpts, exists := opts[0]["image_options"]; exists {
-			if imgOptsMap, ok := imgOpts.(map[string]any); ok {
-				imageOptions = imgOptsMap
-			}
-			// Copy all options except image_options
-			for k, v := range opts[0] {
-				if k != "image_options" {
-					options[k] = v
-				}
-			}
-		} else {
-			maps.Copy(options, opts[0])
+		maps.Copy(options, opts[0])
+	}
+
+	// Extract vision_options
+	var visionOptions map[string]any
+	if vOpts, exists := options["vision_options"]; exists {
+		if vOptsMap, ok := vOpts.(map[string]any); ok {
+			visionOptions = vOptsMap
+			delete(options, "vision_options")
 		}
 	}
 
-	// Add model name to options
+	// Add model name
 	options["model"] = a.client.Model().Name
 
 	request := &types.VisionRequest{
-		Messages:     messages,
-		Images:       images,
-		ImageOptions: imageOptions,
-		Options:      options,
+		Messages:      messages,
+		Images:        images,
+		VisionOptions: visionOptions,
+		Options:       options,
 	}
 
 	result, err := a.client.ExecuteProtocol(ctx, request)
@@ -212,40 +227,42 @@ func (a *agent) Vision(ctx context.Context, prompt string, images []string, opts
 }
 
 // VisionStream executes a streaming vision protocol request with images.
+// Merges model's configured vision options with runtime opts.
+// Extracts vision_options from opts if present, separating them from model options.
 // Automatically sets stream: true in options.
 // Returns a channel of StreamingChunk or error.
 func (a *agent) VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan *types.StreamingChunk, error) {
 	messages := a.initMessages(prompt)
 
+	// Start with model's configured vision options
 	options := make(map[string]any)
-	var imageOptions map[string]any
+	if modelOpts := a.client.Model().Options[types.Vision]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
+	}
 
+	// Merge/override with runtime opts
 	if len(opts) > 0 && opts[0] != nil {
-		// Extract image_options if present
-		if imgOpts, exists := opts[0]["image_options"]; exists {
-			if imgOptsMap, ok := imgOpts.(map[string]any); ok {
-				imageOptions = imgOptsMap
-			}
-			// Copy all options except image_options
-			for k, v := range opts[0] {
-				if k != "image_options" {
-					options[k] = v
-				}
-			}
-		} else {
-			maps.Copy(options, opts[0])
+		maps.Copy(options, opts[0])
+	}
+
+	// Extract vision_options
+	var visionOptions map[string]any
+	if vOpts, exists := options["vision_options"]; exists {
+		if vOptsMap, ok := vOpts.(map[string]any); ok {
+			visionOptions = vOptsMap
+			delete(options, "vision_options")
 		}
 	}
 
-	// Add model name and streaming flag to options
+	// Add model name and streaming flag
 	options["model"] = a.client.Model().Name
 	options["stream"] = true
 
 	request := &types.VisionRequest{
-		Messages:     messages,
-		Images:       images,
-		ImageOptions: imageOptions,
-		Options:      options,
+		Messages:      messages,
+		Images:        images,
+		VisionOptions: visionOptions,
+		Options:       options,
 	}
 
 	return a.client.ExecuteProtocolStream(ctx, request)
@@ -253,16 +270,23 @@ func (a *agent) VisionStream(ctx context.Context, prompt string, images []string
 
 // Tools executes a tools protocol request with function definitions.
 // Converts agent.Tool structs to types.ToolDefinition format.
+// Merges model's configured tools options with runtime opts.
 // Returns parsed ToolsResponse with tool calls or error.
 func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...map[string]any) (*types.ToolsResponse, error) {
 	messages := a.initMessages(prompt)
 
+	// Start with model's configured tools options
 	options := make(map[string]any)
+	if modelOpts := a.client.Model().Options[types.Tools]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
+	}
+
+	// Merge/override with runtime opts
 	if len(opts) > 0 && opts[0] != nil {
 		maps.Copy(options, opts[0])
 	}
 
-	// Add model name to options
+	// Add model name
 	options["model"] = a.client.Model().Name
 
 	// Convert agent.Tool to types.ToolDefinition
@@ -296,14 +320,21 @@ func (a *agent) Tools(ctx context.Context, prompt string, tools []Tool, opts ...
 
 // Embed executes an embeddings protocol request.
 // Creates an EmbeddingsRequest with input text and options.
+// Merges model's configured embeddings options with runtime opts.
 // Returns parsed EmbeddingsResponse or error.
 func (a *agent) Embed(ctx context.Context, input string, opts ...map[string]any) (*types.EmbeddingsResponse, error) {
+	// Start with model's configured embeddings options
 	options := make(map[string]any)
+	if modelOpts := a.client.Model().Options[types.Embeddings]; modelOpts != nil {
+		maps.Copy(options, modelOpts)
+	}
+
+	// Merge/override with runtime opts
 	if len(opts) > 0 && opts[0] != nil {
 		maps.Copy(options, opts[0])
 	}
 
-	// Add model name to options
+	// Add model name
 	options["model"] = a.client.Model().Name
 
 	request := &types.EmbeddingsRequest{

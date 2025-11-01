@@ -20,8 +20,8 @@ The package provides a complete multi-protocol LLM integration system with a pro
 - **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational with protocol-specific response types
 - **Multi-Provider Support**: Working Ollama and Azure AI Foundry providers with authentication (API keys, Entra ID)
 - **OpenAI Format Standard**: Tools wrapped in OpenAI format by default, vision images embedded in message content
-- **Configuration Pass-Through**: Simple option pass-through without runtime merging for predictable behavior
-- **Structured Content Support**: Vision protocol handles multimodal content with image options, tools protocol returns structured tool calls
+- **Configuration Option Merging**: Model configurations provide baseline defaults, runtime options override per request
+- **Structured Content Support**: Vision protocol handles multimodal content with vision-specific options, tools protocol returns structured tool calls
 - **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples
 - **Human-Readable Configuration**: Duration strings ("24s", "1m") and clean JSON configuration
 - **Thread-Safe Operations**: Proper connection pooling, streaming support (chat, vision, tools), and concurrent request handling
@@ -35,7 +35,7 @@ The package provides a complete multi-protocol LLM integration system with a pro
 
 **Active Focus**: The system is stable and ready for use. Architecture simplified with clear boundaries between protocol data and configuration.
 
-**Architecture Highlights**: Protocol-specific request types implementing ProtocolRequest interface, OpenAI format as default standard, option pass-through without runtime merging, vision and tools protocols properly handling structured data.
+**Architecture Highlights**: Protocol-specific request types implementing ProtocolRequest interface, OpenAI format as default standard, configuration option merging with runtime overrides, vision and tools protocols properly handling structured data.
 
 ## Getting Started
 
@@ -297,7 +297,9 @@ go run tools/prompt-agent/main.go \
             "vision": {
               "max_tokens": 4096,
               "temperature": 0.7,
-              "detail": "auto"
+              "vision_options": {
+                "detail": "auto"
+              }
             }
           }
         }
@@ -374,7 +376,9 @@ go run tools/prompt-agent/main.go \
             "vision": {
               "max_tokens": 4096,
               "temperature": 0.7,
-              "detail": "auto"
+              "vision_options": {
+                "detail": "auto"
+              }
             }
           }
         }
@@ -641,12 +645,114 @@ Token Usage: 9 total
 
 ### Configuration
 
-Agent configurations use hierarchical JSON with client-based structure:
+Agent configurations use hierarchical JSON with client-based structure. The library supports configuration option merging where model-configured options provide baseline values that can be overridden at runtime.
 
+**Important**: Configuration options do not define defaults - they specify what options to send to the model. Each model has its own inherent defaults determined by the model implementation (e.g., GPT-4's default temperature is 1.0, Llama models may differ). The go-agents library passes configured options through to the model without implementing model-specific defaults.
+
+#### Configuration Structure
+
+**Required Fields:**
+- `name` - Human-readable agent identifier
+- `client.provider.name` - Provider platform name ("ollama", "azure")
+- `client.provider.base_url` - Provider API endpoint base URL
+- `client.provider.model.name` - Model name on the provider platform (e.g., "llama3.2:3b" on Ollama, "gpt-4o" on Azure)
+- `client.provider.model.capabilities` - At least one protocol must be specified (can be empty object `{}` to use model defaults)
+
+**Optional Fields:**
+- `system_prompt` - System instructions injected into message arrays
+- `client.provider.options` - Provider-specific configuration (e.g., Azure deployment name, API version, auth type)
+- `client.timeout` - Overall request timeout including retries (default: "30s")
+- `client.retry` - Retry configuration object:
+  - `max_retries` - Maximum retry attempts (default: 3)
+  - `initial_backoff` - Initial backoff duration (default: "1s")
+  - `max_backoff` - Maximum backoff duration (default: "30s")
+  - `backoff_multiplier` - Backoff multiplier for exponential backoff (default: 2.0)
+  - `jitter` - Add randomization to backoff delays (default: true)
+- `client.connection_pool_size` - HTTP connection pool size (default: 10)
+- `client.connection_timeout` - Connection establishment timeout (default: "10s")
+
+**Retry Behavior**: The client automatically retries transient failures (HTTP 429, 502, 503, 504, network errors, DNS errors) using exponential backoff with optional jitter. Backoff delay = `initial_backoff * (backoff_multiplier ^ attempt)`, capped at `max_backoff`. Jitter randomizes delays by ±25% to prevent thundering herd. Non-retryable errors (context cancellation, HTTP 4xx except 429) fail immediately.
+
+#### Protocol Capabilities
+
+The `capabilities` map configures protocol-specific options. At least one protocol must be specified for the agent to execute prompts. Each protocol can be configured with options or as an empty object `{}` to use the model's inherent defaults.
+
+**Chat Protocol:**
+```json
+"chat": {
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "top_p": 0.95
+}
+```
+
+Common options: `max_tokens`, `temperature`, `top_p`, `frequency_penalty`, `presence_penalty`
+
+Or use model defaults:
+```json
+"chat": {}
+```
+
+**Vision Protocol:**
+```json
+"vision": {
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "vision_options": {
+    "detail": "high"
+  }
+}
+```
+
+Common options: Same as chat, plus `vision_options` nested map for protocol-specific parameters like `detail` ("low", "high", "auto")
+
+**Tools Protocol:**
+```json
+"tools": {
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "tool_choice": "auto"
+}
+```
+
+Common options: Same as chat, plus `tool_choice` ("auto", "required", specific tool name)
+
+**Embeddings Protocol:**
+```json
+"embeddings": {
+  "dimensions": 768
+}
+```
+
+Common options: `dimensions` (output vector dimensions)
+
+#### Option Merging Behavior
+
+Agent methods merge configured options with runtime options:
+
+1. **Baseline values**: Model's configured protocol options from configuration file
+2. **Runtime override**: Options passed to agent method calls override matching keys
+3. **Model name**: Automatically added to ensure correct routing
+
+Example:
+```go
+// Configuration provides baseline values
+"chat": {"temperature": 0.7, "max_tokens": 4096}
+
+// Runtime call overrides temperature
+agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
+
+// Final options sent to model
+{"temperature": 0.9, "max_tokens": 4096, "model": "llama3.2:3b"}
+```
+
+#### Complete Configuration Examples
+
+**Multi-Protocol Agent (Ollama Platform, Llama Model):**
 ```json
 {
-  "name": "research-assistant",
-  "system_prompt": "You are a helpful research assistant focused on providing accurate and comprehensive information",
+  "name": "multi-protocol-agent",
+  "system_prompt": "You are a helpful AI assistant",
   "client": {
     "provider": {
       "name": "ollama",
@@ -659,6 +765,13 @@ Agent configurations use hierarchical JSON with client-based structure:
             "temperature": 0.7,
             "top_p": 0.95
           },
+          "vision": {
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "vision_options": {
+              "detail": "auto"
+            }
+          },
           "tools": {
             "max_tokens": 4096,
             "temperature": 0.7,
@@ -668,20 +781,66 @@ Agent configurations use hierarchical JSON with client-based structure:
       }
     },
     "timeout": "24s",
-    "max_retries": 3,
-    "retry_backoff_base": "1s",
+    "retry": {
+      "max_retries": 3,
+      "initial_backoff": "1s",
+      "max_backoff": "30s",
+      "backoff_multiplier": 2.0,
+      "jitter": true
+    },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
   }
 }
 ```
 
-For Azure AI Foundry with reasoning models:
-
+**Minimal Chat Agent (Using Model Defaults):**
 ```json
 {
-  "name": "azure-assistant",
-  "system_prompt": "You are a thoughtful AI assistant that provides detailed analysis and reasoning",
+  "name": "minimal-chat-agent",
+  "client": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "llama3.2:3b",
+        "capabilities": {
+          "chat": {}
+        }
+      }
+    }
+  }
+}
+```
+
+**Embeddings Agent (Ollama Platform, Gemma Embedding Model):**
+```json
+{
+  "name": "embeddings-agent",
+  "client": {
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434",
+      "model": {
+        "name": "embeddinggemma:300m",
+        "capabilities": {
+          "embeddings": {
+            "dimensions": 768
+          }
+        }
+      }
+    },
+    "timeout": "24s",
+    "connection_timeout": "6s"
+  }
+}
+```
+
+**Azure OpenAI Platform with Reasoning Model:**
+```json
+{
+  "name": "azure-reasoning-agent",
+  "system_prompt": "You are a thoughtful AI assistant that provides detailed analysis",
   "client": {
     "provider": {
       "name": "azure",
@@ -700,14 +859,12 @@ For Azure AI Foundry with reasoning models:
         "auth_type": "api_key"
       }
     },
-    "timeout": "24s",
-    "max_retries": 3,
-    "retry_backoff_base": "1s",
-    "connection_pool_size": 10,
-    "connection_timeout": "9s"
+    "timeout": "24s"
   }
 }
 ```
+
+Note: Reasoning models (o1, o3-mini) use `max_completion_tokens` and don't support `temperature` or `top_p`.
 
 ## Development
 

@@ -74,7 +74,7 @@ func TestVisionRequest_Marshal(t *testing.T) {
 		Images: []string{
 			"data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
 		},
-		ImageOptions: map[string]any{
+		VisionOptions: map[string]any{
 			"detail": "high",
 		},
 		Options: map[string]any{
@@ -141,7 +141,7 @@ func TestVisionRequest_Marshal_MultipleImages(t *testing.T) {
 			"data:image/png;base64,image1",
 			"data:image/png;base64,image2",
 		},
-		ImageOptions: map[string]any{
+		VisionOptions: map[string]any{
 			"detail": "low",
 		},
 		Options: map[string]any{

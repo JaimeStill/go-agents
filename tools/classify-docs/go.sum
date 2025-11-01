@@ -1,7 +1,5 @@
-github.com/JaimeStill/go-agents v0.1.2 h1:FTSlTgywWLvp17i82DUhk/zoakMzHI3xki7ROsLb+NY=
-github.com/JaimeStill/go-agents v0.1.2/go.mod h1:Ui+Ea0YrnI37MbWXP7VxqX3IcIppkQRSO4/DEl4/4B4=
-github.com/JaimeStill/go-agents v0.1.3 h1:tNlCnDr/ihWy7aIK9h0fwpAPgTXFZaaspPjRfHZHrHk=
-github.com/JaimeStill/go-agents v0.1.3/go.mod h1:Ui+Ea0YrnI37MbWXP7VxqX3IcIppkQRSO4/DEl4/4B4=
+github.com/JaimeStill/go-agents v0.2.0 h1:Ej97ap+ZyKDqbAZh6+hfAGxfiiVsy1nPI52d7u7To5Q=
+github.com/JaimeStill/go-agents v0.2.0/go.mod h1:Ui+Ea0YrnI37MbWXP7VxqX3IcIppkQRSO4/DEl4/4B4=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hhrutter/lzw v1.0.0 h1:laL89Llp86W3rRs83LvKbwYRx6INE8gDn0XNb1oXtm0=

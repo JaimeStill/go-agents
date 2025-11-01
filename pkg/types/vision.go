@@ -8,12 +8,12 @@ import (
 )
 
 // VisionRequest represents a vision protocol request with image inputs.
-// Separates images and image-specific options from model configuration options.
+// Separates images and vision-specific options from model configuration options.
 type VisionRequest struct {
-	Messages     []Message
-	Images       []string           // URLs or base64 data URIs
-	ImageOptions map[string]any     // Options for image_url (e.g., detail: "high")
-	Options      map[string]any     // Model configuration options
+	Messages      []Message
+	Images        []string           // URLs or base64 data URIs
+	VisionOptions map[string]any     // Vision-specific options (e.g., detail: "high")
+	Options       map[string]any     // Model configuration options
 }
 
 // GetProtocol returns the Vision protocol identifier.
@@ -74,9 +74,9 @@ func (r *VisionRequest) Marshal() ([]byte, error) {
 			"url": imgURL,
 		}
 
-		// Embed image_options into image_url map
-		if r.ImageOptions != nil {
-			for key, value := range r.ImageOptions {
+		// Embed vision_options into image_url map
+		if r.VisionOptions != nil {
+			for key, value := range r.VisionOptions {
 				imageURL[key] = value
 			}
 		}
