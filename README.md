@@ -2,7 +2,7 @@
 
 A platform and model agnostic Go agent primitive library.
 
-## Status: Pre-Release (v0.2.0)
+## Status: Pre-Release (v0.2.1)
 
 **go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
 
