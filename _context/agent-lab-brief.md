@@ -238,7 +238,7 @@ Without Agent Lab:
 
 Agent Lab represents a strategic investment in AI workflow infrastructure that delivers immediate value through document classification while establishing a platform for long-term innovation. By combining intuitive design tools with production-grade capabilities, we enable organizations to confidently deploy AI workflows that meet enterprise security and compliance requirements.
 
-The open-source foundation ensures the community benefits from our work while positioning Agent Lab as a reference implementation for intelligent workflow systems. With a clear 4-5 month roadmap and proven technology foundation, Agent Lab is ready to transform how organizations design, test, and deploy AI-powered workflows.
+The open-source foundation ensures the community benefits from our work while positioning Agent Lab as a reference implementation for intelligent workflow systems.
 
 ---
 
