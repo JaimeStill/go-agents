@@ -1,5 +1,45 @@
 # Changelog
 
+## [v0.3.0] - 2025-12-01
+
+**Breaking Changes**:
+- Removed `pkg/types` package - split into `pkg/protocol`, `pkg/response`, `pkg/model`, and `pkg/request`
+- Flattened `AgentConfig` structure: `Provider` and `Model` are now peer fields with `Client` (not nested under `Client`)
+- `ClientConfig` no longer contains `Provider` - HTTP client settings only
+- `ProviderConfig` no longer contains `Model` - provider connection settings only
+- `Agent.Model()` returns `*model.Model` instead of `*types.Model`
+
+**Added**:
+- `pkg/protocol` package for protocol types and message structures
+  - `Protocol` type with constants: `Chat`, `Vision`, `Tools`, `Embeddings`
+  - `Message` type and `NewMessage()` constructor
+  - `IsValid()`, `ValidProtocols()`, `ProtocolStrings()` functions
+  - `Protocol.SupportsStreaming()` method
+- `pkg/response` package for response parsing and types
+  - `ChatResponse` type with `Content()` method
+  - `StreamingChunk` type with `Content()` method
+  - `EmbeddingsResponse` type
+  - `ToolsResponse` type with `ToolCall` and `ToolCallFunction` types
+  - `ParseChat()`, `ParseEmbeddings()`, `ParseTools()`, `ParseStream()` functions
+- `pkg/model` package for model runtime type
+  - `Model` type with `Name` and `Options` fields
+  - `New()` function for creating Model from ModelConfig
+- `pkg/request` package for request interface and protocol-specific request types
+  - `Request` interface with `Protocol()`, `Headers()`, `Marshal()`, `Provider()`, `Model()` methods
+  - `ChatRequest` type with `NewChat()` constructor
+  - `VisionRequest` type with `NewVision()` constructor
+  - `ToolsRequest` type with `NewTools()` constructor
+  - `EmbeddingsRequest` type with `NewEmbeddings()` constructor
+
+**Changed**:
+- `AgentConfig.Provider` moved from `AgentConfig.Client.Provider` to top-level field
+- `AgentConfig.Model` moved from `AgentConfig.Client.Provider.Model` to top-level field
+- Mock package types updated to use `pkg/protocol` and `pkg/response`
+
+**Removed**:
+- `pkg/types` package (replaced by `pkg/protocol`, `pkg/response`, `pkg/model`, `pkg/request`)
+- Nested configuration hierarchy (`Client.Provider.Model`)
+
 ## [v0.2.1] - 2025-11-01
 
 **Changed**:

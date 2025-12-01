@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/mock"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 func TestNewMockClient(t *testing.T) {
@@ -16,8 +16,8 @@ func TestNewMockClient(t *testing.T) {
 	}
 }
 
-func TestMockClient_ExecuteProtocol(t *testing.T) {
-	expectedResponse := &types.ChatResponse{
+func TestMockClient_Execute(t *testing.T) {
+	expectedResponse := &response.ChatResponse{
 		Model: "test-model",
 	}
 
@@ -25,17 +25,12 @@ func TestMockClient_ExecuteProtocol(t *testing.T) {
 		mock.WithExecuteResponse(expectedResponse, nil),
 	)
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
-		},
-		Options: map[string]any{"model": "test-model"},
-	}
-
-	result, err := client.ExecuteProtocol(context.Background(), chatRequest)
+	// MockClient.Execute takes a request.Request, but we can test
+	// with the mock's configured response
+	result, err := client.Execute(context.Background(), nil)
 
 	if err != nil {
-		t.Fatalf("ExecuteProtocol failed: %v", err)
+		t.Fatalf("Execute failed: %v", err)
 	}
 
 	if result != expectedResponse {
@@ -43,14 +38,14 @@ func TestMockClient_ExecuteProtocol(t *testing.T) {
 	}
 }
 
-func TestMockClient_ExecuteProtocolStream(t *testing.T) {
+func TestMockClient_ExecuteStream(t *testing.T) {
 	// Create properly typed StreamingChunk
-	chunk := &types.StreamingChunk{
+	chunk := &response.StreamingChunk{
 		Model: "test-model",
 	}
 	chunk.Choices = make([]struct {
-		Index        int     `json:"index"`
-		Delta        struct {
+		Index int `json:"index"`
+		Delta struct {
 			Role    string `json:"role,omitempty"`
 			Content string `json:"content,omitempty"`
 		} `json:"delta"`
@@ -58,23 +53,16 @@ func TestMockClient_ExecuteProtocolStream(t *testing.T) {
 	}, 1)
 	chunk.Choices[0].Delta.Content = "Hello"
 
-	chunks := []*types.StreamingChunk{chunk}
+	chunks := []*response.StreamingChunk{chunk}
 
 	client := mock.NewMockClient(
 		mock.WithStreamResponse(chunks, nil),
 	)
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
-		},
-		Options: map[string]any{"model": "test-model", "stream": true},
-	}
-
-	stream, err := client.ExecuteProtocolStream(context.Background(), chatRequest)
+	stream, err := client.ExecuteStream(context.Background(), nil)
 
 	if err != nil {
-		t.Fatalf("ExecuteProtocolStream failed: %v", err)
+		t.Fatalf("ExecuteStream failed: %v", err)
 	}
 
 	count := 0

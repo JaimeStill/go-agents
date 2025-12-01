@@ -40,10 +40,10 @@ func main() {
 	}
 
 	if *token != "" {
-		if cfg.Client.Provider.Options == nil {
-			cfg.Client.Provider.Options = make(map[string]any)
+		if cfg.Provider.Options == nil {
+			cfg.Provider.Options = make(map[string]any)
 		}
-		cfg.Client.Provider.Options["token"] = *token
+		cfg.Provider.Options["token"] = *token
 	}
 
 	if *systemPrompt != "" {

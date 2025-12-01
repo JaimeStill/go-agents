@@ -2,37 +2,6 @@
   "name": "azure-gpt4-agent",
   "system_prompt": "You are an expert at analyzing and understanding the content of documents",
   "client": {
-    "provider": {
-      "name": "azure",
-      "base_url": "https://go-agents-platform.openai.azure.com/openai",
-      "model": {
-        "name": "gpt-4o",
-        "capabilities": {
-          "chat": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.95
-          },
-          "vision": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "vision_options": {
-              "detail": "high"
-            }
-          },
-          "tools": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "tool_choice": "auto"
-          }
-        }
-      },
-      "options": {
-        "deployment": "gpt-4o",
-        "api_version": "2025-01-01-preview",
-        "auth_type": "api_key"
-      }
-    },
     "timeout": "24s",
     "retry": {
       "max_retries": 3,
@@ -43,5 +12,36 @@
     },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
+  },
+  "provider": {
+    "name": "azure",
+    "base_url": "https://go-agents-platform.openai.azure.com/openai",
+    "options": {
+      "deployment": "gpt-4o",
+      "api_version": "2025-01-01-preview",
+      "auth_type": "api_key"
+    }
+  },
+  "model": {
+    "name": "gpt-4o",
+    "capabilities": {
+      "chat": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 0.95
+      },
+      "vision": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "vision_options": {
+          "detail": "high"
+        }
+      },
+      "tools": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "tool_choice": "auto"
+      }
+    }
   }
 }

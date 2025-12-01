@@ -10,35 +10,29 @@ import (
 	"time"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
-	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/request"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // Client provides the interface for executing LLM protocol requests.
-// It orchestrates the flow from protocol selection through HTTP execution
-// to response processing, with model option merging, retry logic, and health tracking.
+// It orchestrates HTTP execution with retry logic and health tracking.
+// Provider and model come from requests, enabling flexible request composition.
 type Client interface {
-	// Provider returns the provider instance managed by this client.
-	Provider() providers.Provider
-
-	// Model returns the model instance managed by this client.
-	Model() *types.Model
-
 	// HTTPClient returns a configured HTTP client.
 	// Creates a new client on each call with timeout and connection pool settings.
 	HTTPClient() *http.Client
 
-	// ExecuteProtocol executes a protocol request and returns the parsed response.
-	// Accepts protocol-specific request types (ChatRequest, VisionRequest, etc.).
+	// Execute executes a protocol request and returns the parsed response.
+	// Provider and model are obtained from the request.
 	// Automatically retries on transient failures (HTTP 429/502/503/504, network errors).
-	// Returns an error if protocol is not supported or request fails.
-	ExecuteProtocol(ctx context.Context, request types.ProtocolRequest) (any, error)
+	// Returns an error if request fails.
+	Execute(ctx context.Context, req request.Request) (any, error)
 
-	// ExecuteProtocolStream executes a streaming protocol request and returns a channel of chunks.
-	// Accepts protocol-specific request types and sets stream:true.
+	// ExecuteStream executes a streaming protocol request and returns a channel of chunks.
+	// Provider and model are obtained from the request.
 	// The channel is closed when streaming completes or context is cancelled.
 	// Returns an error if protocol doesn't support streaming or request fails.
-	ExecuteProtocolStream(ctx context.Context, request types.ProtocolRequest) (<-chan *types.StreamingChunk, error)
+	ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error)
 
 	// IsHealthy returns the current health status of the client.
 	// Set to false after request failures, true after successful requests.
@@ -46,11 +40,9 @@ type Client interface {
 	IsHealthy() bool
 }
 
-// client implements the Client interface with provider and model orchestration.
+// client implements the Client interface with HTTP orchestration.
 type client struct {
-	provider providers.Provider
-	model    *types.Model
-	config   *config.ClientConfig
+	config *config.ClientConfig
 
 	mutex      sync.RWMutex
 	healthy    bool
@@ -58,31 +50,13 @@ type client struct {
 }
 
 // New creates a new Client from configuration.
-// Creates the provider from configuration and initializes health tracking.
-// Returns an error if provider creation fails.
-func New(cfg *config.ClientConfig) (Client, error) {
-	provider, err := providers.Create(cfg.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create provider: %w", err)
-	}
-
+// Initializes HTTP settings and health tracking.
+func New(cfg *config.ClientConfig) Client {
 	return &client{
-		provider:   provider,
-		model:      provider.Model(),
 		config:     cfg,
 		healthy:    true,
 		lastHealth: time.Now(),
-	}, nil
-}
-
-// Provider returns the provider instance managed by this client.
-func (c *client) Provider() providers.Provider {
-	return c.provider
-}
-
-// Model returns the model instance managed by this client.
-func (c *client) Model() *types.Model {
-	return c.model
+	}
 }
 
 // HTTPClient creates and returns a configured HTTP client.
@@ -98,22 +72,29 @@ func (c *client) HTTPClient() *http.Client {
 	}
 }
 
-// ExecuteProtocol executes a standard (non-streaming) protocol request.
-// Accepts protocol-specific request types and executes with retry.
-func (c *client) ExecuteProtocol(ctx context.Context, request types.ProtocolRequest) (any, error) {
-	// Execute with retry - retry logic determines if errors are retryable
+// Execute executes a standard (non-streaming) protocol request.
+// Provider and model are obtained from the request.
+// Executes with retry on transient failures.
+func (c *client) Execute(ctx context.Context, req request.Request) (any, error) {
 	return doWithRetry(ctx, c.config.Retry, func(ctx context.Context) (any, error) {
-		return c.execute(ctx, request)
+		return c.execute(ctx, req)
 	})
 }
 
 // execute performs a single HTTP request attempt without retry logic.
 // Returns HTTPStatusError for bad status codes, which retry logic evaluates.
-func (c *client) execute(ctx context.Context, request types.ProtocolRequest) (any, error) {
-	protocol := request.GetProtocol()
+func (c *client) execute(ctx context.Context, req request.Request) (any, error) {
+	provider := req.Provider()
+	proto := req.Protocol()
+
+	// Marshal request body through provider
+	body, err := req.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
 	// Prepare provider request
-	providerRequest, err := c.provider.PrepareRequest(ctx, request)
+	providerRequest, err := provider.PrepareRequest(ctx, proto, body, req.Headers())
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare request: %w", err)
 	}
@@ -133,7 +114,7 @@ func (c *client) execute(ctx context.Context, request types.ProtocolRequest) (an
 	for key, value := range providerRequest.Headers {
 		httpReq.Header.Set(key, value)
 	}
-	c.provider.SetHeaders(httpReq)
+	provider.SetHeaders(httpReq)
 
 	// Execute HTTP request
 	httpClient := c.HTTPClient()
@@ -156,7 +137,7 @@ func (c *client) execute(ctx context.Context, request types.ProtocolRequest) (an
 	}
 
 	// Process response through provider
-	result, err := c.provider.ProcessResponse(ctx, resp, protocol)
+	result, err := provider.ProcessResponse(ctx, resp, proto)
 	if err != nil {
 		c.setHealthy(false)
 		return nil, err
@@ -166,26 +147,34 @@ func (c *client) execute(ctx context.Context, request types.ProtocolRequest) (an
 	return result, nil
 }
 
-// ExecuteProtocolStream executes a streaming protocol request.
+// ExecuteStream executes a streaming protocol request.
+// Provider and model are obtained from the request.
 // Verifies protocol supports streaming and executes streaming flow.
-func (c *client) ExecuteProtocolStream(ctx context.Context, request types.ProtocolRequest) (<-chan *types.StreamingChunk, error) {
-	protocol := request.GetProtocol()
+func (c *client) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
+	proto := req.Protocol()
 
-	// Verify protocol supports streaming using Protocol method
-	if !protocol.SupportsStreaming() {
-		return nil, fmt.Errorf("protocol %s does not support streaming", protocol)
+	// Verify protocol supports streaming
+	if !proto.SupportsStreaming() {
+		return nil, fmt.Errorf("protocol %s does not support streaming", proto)
 	}
 
-	return c.executeStream(ctx, request)
+	return c.executeStream(ctx, req)
 }
 
 // executeStream performs the streaming HTTP request.
 // Streaming requests are not retried - they fail immediately on error.
-func (c *client) executeStream(ctx context.Context, request types.ProtocolRequest) (<-chan *types.StreamingChunk, error) {
-	protocol := request.GetProtocol()
+func (c *client) executeStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
+	provider := req.Provider()
+	proto := req.Protocol()
+
+	// Marshal request body through provider
+	body, err := req.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
 	// Prepare streaming request
-	providerRequest, err := c.provider.PrepareStreamRequest(ctx, request)
+	providerRequest, err := provider.PrepareStreamRequest(ctx, proto, body, req.Headers())
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare streaming request: %w", err)
 	}
@@ -205,7 +194,7 @@ func (c *client) executeStream(ctx context.Context, request types.ProtocolReques
 	for key, value := range providerRequest.Headers {
 		httpReq.Header.Set(key, value)
 	}
-	c.provider.SetHeaders(httpReq)
+	provider.SetHeaders(httpReq)
 
 	// Execute HTTP request
 	httpClient := c.HTTPClient()
@@ -224,7 +213,7 @@ func (c *client) executeStream(ctx context.Context, request types.ProtocolReques
 	}
 
 	// Process stream through provider
-	stream, err := c.provider.ProcessStreamResponse(ctx, resp, protocol)
+	stream, err := provider.ProcessStreamResponse(ctx, resp, proto)
 	if err != nil {
 		c.setHealthy(false)
 		resp.Body.Close()
@@ -232,13 +221,13 @@ func (c *client) executeStream(ctx context.Context, request types.ProtocolReques
 	}
 
 	// Convert provider stream to typed chunk stream
-	output := make(chan *types.StreamingChunk)
+	output := make(chan *response.StreamingChunk)
 	go func() {
 		defer close(output)
 		defer resp.Body.Close()
 
 		for data := range stream {
-			if chunk, ok := data.(*types.StreamingChunk); ok {
+			if chunk, ok := data.(*response.StreamingChunk); ok {
 				select {
 				case output <- chunk:
 				case <-ctx.Done():

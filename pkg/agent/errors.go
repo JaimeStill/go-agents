@@ -107,17 +107,27 @@ func WithName(name string) ErrorOption {
 	}
 }
 
-// WithClient extracts client identification from client configuration.
+// WithAgent extracts identification from agent configuration.
 // Creates a string in the format "provider/model", "provider", or "model"
 // depending on available information.
-func WithClient(client *config.ClientConfig) ErrorOption {
+func WithAgent(cfg *config.AgentConfig) ErrorOption {
 	return func(e *AgentError) {
-		if client.Provider.Name != "" && client.Provider.Model.Name != "" {
-			e.Client = fmt.Sprintf("%s/%s", client.Provider.Name, client.Provider.Model.Name)
-		} else if client.Provider.Name != "" {
-			e.Client = client.Provider.Name
-		} else if client.Provider.Model.Name != "" {
-			e.Client = client.Provider.Model.Name
+		providerName := ""
+		modelName := ""
+
+		if cfg.Provider != nil {
+			providerName = cfg.Provider.Name
+		}
+		if cfg.Model != nil {
+			modelName = cfg.Model.Name
+		}
+
+		if providerName != "" && modelName != "" {
+			e.Client = fmt.Sprintf("%s/%s", providerName, modelName)
+		} else if providerName != "" {
+			e.Client = providerName
+		} else if modelName != "" {
+			e.Client = modelName
 		} else {
 			e.Client = "unknown"
 		}

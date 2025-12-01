@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // OllamaProvider implements Provider for Ollama services with OpenAI-compatible API.
@@ -22,80 +24,44 @@ type OllamaProvider struct {
 // NewOllama creates a new OllamaProvider from configuration.
 // Automatically adds /v1 suffix to base URL if not present for OpenAI compatibility.
 // Supports optional authentication via "auth_type" and "token" options.
-// Returns an error if model creation fails.
 func NewOllama(c *config.ProviderConfig) (Provider, error) {
 	baseURL := c.BaseURL
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL = strings.TrimSuffix(baseURL, "/") + "/v1"
 	}
 
-	model := types.FromConfig(c.Model)
-
 	return &OllamaProvider{
-		BaseProvider: NewBaseProvider(c.Name, baseURL, model),
+		BaseProvider: NewBaseProvider(c.Name, baseURL),
 		options:      c.Options,
 	}, nil
 }
 
-// GetEndpoint returns the full Ollama endpoint URL for a protocol.
+// Endpoint returns the full Ollama endpoint URL for a protocol.
 // Supports chat, vision, tools (all use /chat/completions), and embeddings (/embeddings).
 // Returns an error if the protocol is not supported.
-func (p *OllamaProvider) GetEndpoint(protocol types.Protocol) (string, error) {
-	endpoints := map[types.Protocol]string{
-		types.Chat:       "/chat/completions",
-		types.Vision:     "/chat/completions",
-		types.Tools:      "/chat/completions",
-		types.Embeddings: "/embeddings",
+func (p *OllamaProvider) Endpoint(proto protocol.Protocol) (string, error) {
+	endpoints := map[protocol.Protocol]string{
+		protocol.Chat:       "/chat/completions",
+		protocol.Vision:     "/chat/completions",
+		protocol.Tools:      "/chat/completions",
+		protocol.Embeddings: "/embeddings",
 	}
 
-	endpoint, exists := endpoints[protocol]
+	endpoint, exists := endpoints[proto]
 	if !exists {
-		return "", fmt.Errorf("protocol %s not supported by Ollama", protocol)
+		return "", fmt.Errorf("protocol %s not supported by Ollama", proto)
 	}
 
 	return fmt.Sprintf("%s%s", p.BaseURL(), endpoint), nil
 }
 
 // PrepareRequest prepares a standard (non-streaming) Ollama request.
-// Marshals the protocol request body and includes protocol headers.
-// Returns an error if the endpoint is invalid or marshaling fails.
-func (p *OllamaProvider) PrepareRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error) {
-	protocol := request.GetProtocol()
-	endpoint, err := p.GetEndpoint(protocol)
+// Returns an error if the endpoint is invalid.
+func (p *OllamaProvider) PrepareRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error) {
+	endpoint, err := p.Endpoint(proto)
 	if err != nil {
 		return nil, err
 	}
-
-	body, err := request.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	return &Request{
-		URL:     endpoint,
-		Headers: request.GetHeaders(),
-		Body:    body,
-	}, nil
-}
-
-// PrepareStreamRequest prepares a streaming Ollama request.
-// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
-// Returns an error if the endpoint is invalid or marshaling fails.
-func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error) {
-	protocol := request.GetProtocol()
-	endpoint, err := p.GetEndpoint(protocol)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := request.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	headers := request.GetHeaders()
-	headers["Accept"] = "text/event-stream"
-	headers["Cache-Control"] = "no-cache"
 
 	return &Request{
 		URL:     endpoint,
@@ -104,10 +70,32 @@ func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, request types
 	}, nil
 }
 
+// PrepareStreamRequest prepares a streaming Ollama request.
+// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
+// Returns an error if the endpoint is invalid.
+func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error) {
+	endpoint, err := p.Endpoint(proto)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clone headers to avoid mutating the original
+	streamHeaders := make(map[string]string)
+	maps.Copy(streamHeaders, headers)
+	streamHeaders["Accept"] = "text/event-stream"
+	streamHeaders["Cache-Control"] = "no-cache"
+
+	return &Request{
+		URL:     endpoint,
+		Headers: streamHeaders,
+		Body:    body,
+	}, nil
+}
+
 // ProcessResponse processes a standard Ollama HTTP response.
 // Returns an error if the HTTP status is not OK.
-// Uses types.ParseResponse for protocol-aware parsing.
-func (p *OllamaProvider) ProcessResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (any, error) {
+// Uses response.Parse for protocol-aware parsing.
+func (p *OllamaProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
@@ -118,7 +106,7 @@ func (p *OllamaProvider) ProcessResponse(ctx context.Context, resp *http.Respons
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return types.ParseResponse(protocol, body)
+	return response.Parse(proto, body)
 }
 
 // ProcessStreamResponse processes a streaming Ollama HTTP response.
@@ -126,7 +114,7 @@ func (p *OllamaProvider) ProcessResponse(ctx context.Context, resp *http.Respons
 // Returns a channel that emits parsed streaming chunks.
 // The channel is closed when the stream completes or context is cancelled.
 // Returns an error if the HTTP status is not OK.
-func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (<-chan any, error) {
+func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
@@ -147,7 +135,7 @@ func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.R
 			}
 			if err != nil {
 				select {
-				case output <- &types.StreamingChunk{Error: err}:
+				case output <- &response.StreamingChunk{Error: err}:
 				case <-ctx.Done():
 				}
 				return
@@ -165,11 +153,11 @@ func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.R
 			}
 
 			// Strip SSE "data: " prefix
-			if strings.HasPrefix(line, "data: ") {
-				line = strings.TrimPrefix(line, "data: ")
+			if after, ok := strings.CutPrefix(line, "data: "); ok {
+				line = after
 			}
 
-			chunk, err := types.ParseStreamChunk(protocol, []byte(line))
+			chunk, err := response.ParseStreamChunk(proto, []byte(line))
 			if err != nil {
 				continue
 			}

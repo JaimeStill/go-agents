@@ -6,20 +6,18 @@ import (
 	"time"
 
 	"github.com/JaimeStill/go-agents/pkg/client"
-	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/request"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // MockClient implements client.Client interface for testing.
 type MockClient struct {
-	provider providers.Provider
-	model    *types.Model
-	healthy  bool
+	healthy bool
 
 	// Configurable responses
 	executeResponse any
 	executeError    error
-	streamChunks    []*types.StreamingChunk
+	streamChunks    []*response.StreamingChunk
 	streamError     error
 	httpClient      *http.Client
 }
@@ -27,11 +25,6 @@ type MockClient struct {
 // NewMockClient creates a new MockClient with default configuration.
 func NewMockClient(opts ...MockClientOption) *MockClient {
 	m := &MockClient{
-		provider: NewMockProvider(),
-		model: &types.Model{
-			Name:    "mock-model",
-			Options: make(map[types.Protocol]map[string]any),
-		},
 		healthy: true,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -48,21 +41,7 @@ func NewMockClient(opts ...MockClientOption) *MockClient {
 // MockClientOption configures a MockClient.
 type MockClientOption func(*MockClient)
 
-// WithMockProvider sets a custom provider.
-func WithMockProvider(provider providers.Provider) MockClientOption {
-	return func(m *MockClient) {
-		m.provider = provider
-	}
-}
-
-// WithMockModel sets a custom model.
-func WithMockModel(model *types.Model) MockClientOption {
-	return func(m *MockClient) {
-		m.model = model
-	}
-}
-
-// WithExecuteResponse sets the response for ExecuteProtocol.
+// WithExecuteResponse sets the response for Execute.
 func WithExecuteResponse(response any, err error) MockClientOption {
 	return func(m *MockClient) {
 		m.executeResponse = response
@@ -70,8 +49,8 @@ func WithExecuteResponse(response any, err error) MockClientOption {
 	}
 }
 
-// WithStreamResponse sets the chunks for ExecuteProtocolStream.
-func WithStreamResponse(chunks []*types.StreamingChunk, err error) MockClientOption {
+// WithStreamResponse sets the chunks for ExecuteStream.
+func WithStreamResponse(chunks []*response.StreamingChunk, err error) MockClientOption {
 	return func(m *MockClient) {
 		m.streamChunks = chunks
 		m.streamError = err
@@ -86,20 +65,10 @@ func WithHealthy(healthy bool) MockClientOption {
 }
 
 // WithHTTPClient sets a custom HTTP client.
-func WithHTTPClient(client *http.Client) MockClientOption {
+func WithHTTPClient(c *http.Client) MockClientOption {
 	return func(m *MockClient) {
-		m.httpClient = client
+		m.httpClient = c
 	}
-}
-
-// Provider returns the mock provider.
-func (m *MockClient) Provider() providers.Provider {
-	return m.provider
-}
-
-// Model returns the mock model.
-func (m *MockClient) Model() *types.Model {
-	return m.model
 }
 
 // HTTPClient returns the configured HTTP client.
@@ -107,18 +76,18 @@ func (m *MockClient) HTTPClient() *http.Client {
 	return m.httpClient
 }
 
-// ExecuteProtocol returns the predetermined response.
-func (m *MockClient) ExecuteProtocol(ctx context.Context, request types.ProtocolRequest) (any, error) {
+// Execute returns the predetermined response.
+func (m *MockClient) Execute(ctx context.Context, req request.Request) (any, error) {
 	return m.executeResponse, m.executeError
 }
 
-// ExecuteProtocolStream returns a channel with predetermined chunks.
-func (m *MockClient) ExecuteProtocolStream(ctx context.Context, request types.ProtocolRequest) (<-chan *types.StreamingChunk, error) {
+// ExecuteStream returns a channel with predetermined chunks.
+func (m *MockClient) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
 	if m.streamError != nil {
 		return nil, m.streamError
 	}
 
-	ch := make(chan *types.StreamingChunk, len(m.streamChunks))
+	ch := make(chan *response.StreamingChunk, len(m.streamChunks))
 	for _, chunk := range m.streamChunks {
 		ch <- chunk
 	}

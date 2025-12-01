@@ -1,18 +1,6 @@
 {
   "name": "embeddings-agent",
   "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "embeddinggemma:300m",
-        "capabilities": {
-          "embeddings": {
-            "dimensions": 768
-          }
-        }
-      }
-    },
     "timeout": "24s",
     "retry": {
       "max_retries": 3,
@@ -23,5 +11,17 @@
     },
     "connection_pool_size": 10,
     "connection_timeout": "6s"
+  },
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "embeddinggemma:300m",
+    "capabilities": {
+      "embeddings": {
+        "dimensions": 768
+      }
+    }
   }
 }

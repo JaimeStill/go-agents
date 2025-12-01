@@ -1,27 +1,6 @@
 {
   "name": "vision-agent",
   "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "gemma3:4b",
-        "capabilities": {
-          "chat": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.95
-          },
-          "vision": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "vision_options": {
-              "detail": "auto"
-            }
-          }
-        }
-      }
-    },
     "timeout": "24s",
     "retry": {
       "max_retries": 3,
@@ -32,5 +11,26 @@
     },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
+  },
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "gemma3:4b",
+    "capabilities": {
+      "chat": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 0.95
+      },
+      "vision": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "vision_options": {
+          "detail": "auto"
+        }
+      }
+    }
   }
 }

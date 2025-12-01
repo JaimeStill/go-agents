@@ -1,18 +1,19 @@
 package mock
 
 import (
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // NewSimpleChatAgent creates a MockAgent configured for simple chat responses.
 // Useful for basic orchestration testing without complex protocol handling.
-func NewSimpleChatAgent(id string, response string) *MockAgent {
-	chatResponse := &types.ChatResponse{
+func NewSimpleChatAgent(id string, content string) *MockAgent {
+	chatResponse := &response.ChatResponse{
 		Model: "mock-model",
 	}
 	chatResponse.Choices = append(chatResponse.Choices, struct {
-		Index   int     `json:"index"`
-		Message types.Message `json:"message"`
+		Index   int              `json:"index"`
+		Message protocol.Message `json:"message"`
 		Delta   *struct {
 			Role    string `json:"role,omitempty"`
 			Content string `json:"content,omitempty"`
@@ -20,7 +21,7 @@ func NewSimpleChatAgent(id string, response string) *MockAgent {
 		FinishReason string `json:"finish_reason,omitempty"`
 	}{
 		Index:   0,
-		Message: types.NewMessage("assistant", response),
+		Message: protocol.NewMessage("assistant", content),
 	})
 
 	return NewMockAgent(
@@ -32,9 +33,9 @@ func NewSimpleChatAgent(id string, response string) *MockAgent {
 // NewStreamingChatAgent creates a MockAgent configured for streaming chat.
 // Returns chunks sequentially when ChatStream is called.
 func NewStreamingChatAgent(id string, chunks []string) *MockAgent {
-	streamChunks := make([]types.StreamingChunk, len(chunks))
+	streamChunks := make([]response.StreamingChunk, len(chunks))
 	for i, content := range chunks {
-		chunk := types.StreamingChunk{
+		chunk := response.StreamingChunk{
 			Model: "mock-model",
 		}
 		chunk.Choices = append(chunk.Choices, struct {
@@ -64,24 +65,24 @@ func NewStreamingChatAgent(id string, chunks []string) *MockAgent {
 
 // NewToolsAgent creates a MockAgent configured for tool calling.
 // Returns tool calls in the Tools response.
-func NewToolsAgent(id string, toolCalls []types.ToolCall) *MockAgent {
-	toolsResponse := &types.ToolsResponse{
+func NewToolsAgent(id string, toolCalls []response.ToolCall) *MockAgent {
+	toolsResponse := &response.ToolsResponse{
 		Model: "mock-model",
 	}
 	toolsResponse.Choices = append(toolsResponse.Choices, struct {
 		Index   int `json:"index"`
 		Message struct {
-			Role      string     `json:"role"`
-			Content   string     `json:"content"`
-			ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+			Role      string              `json:"role"`
+			Content   string              `json:"content"`
+			ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason,omitempty"`
 	}{
 		Index: 0,
 		Message: struct {
-			Role      string     `json:"role"`
-			Content   string     `json:"content"`
-			ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+			Role      string              `json:"role"`
+			Content   string              `json:"content"`
+			ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
 		}{
 			Role:      "assistant",
 			Content:   "",
@@ -98,7 +99,7 @@ func NewToolsAgent(id string, toolCalls []types.ToolCall) *MockAgent {
 // NewEmbeddingsAgent creates a MockAgent configured for embeddings generation.
 // Returns the provided embeddings vector.
 func NewEmbeddingsAgent(id string, embedding []float64) *MockAgent {
-	embeddingsResponse := &types.EmbeddingsResponse{
+	embeddingsResponse := &response.EmbeddingsResponse{
 		Model: "mock-model",
 	}
 	embeddingsResponse.Data = append(embeddingsResponse.Data, struct {
@@ -117,15 +118,15 @@ func NewEmbeddingsAgent(id string, embedding []float64) *MockAgent {
 	)
 }
 
-// NewMultiProtocolAgent creates a MockAgent configured for multiple types.
+// NewMultiProtocolAgent creates a MockAgent configured for multiple protocols.
 // Useful for testing agents that handle different protocol types.
 func NewMultiProtocolAgent(id string) *MockAgent {
-	chatResponse := &types.ChatResponse{
+	chatResponse := &response.ChatResponse{
 		Model: "mock-model",
 	}
 	chatResponse.Choices = append(chatResponse.Choices, struct {
-		Index   int     `json:"index"`
-		Message types.Message `json:"message"`
+		Index   int              `json:"index"`
+		Message protocol.Message `json:"message"`
 		Delta   *struct {
 			Role    string `json:"role,omitempty"`
 			Content string `json:"content,omitempty"`
@@ -133,34 +134,34 @@ func NewMultiProtocolAgent(id string) *MockAgent {
 		FinishReason string `json:"finish_reason,omitempty"`
 	}{
 		Index:   0,
-		Message: types.NewMessage("assistant", "Mock chat response"),
+		Message: protocol.NewMessage("assistant", "Mock chat response"),
 	})
 
-	toolsResponse := &types.ToolsResponse{
+	toolsResponse := &response.ToolsResponse{
 		Model: "mock-model",
 	}
 	toolsResponse.Choices = append(toolsResponse.Choices, struct {
 		Index   int `json:"index"`
 		Message struct {
-			Role      string     `json:"role"`
-			Content   string     `json:"content"`
-			ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+			Role      string              `json:"role"`
+			Content   string              `json:"content"`
+			ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason,omitempty"`
 	}{
 		Index: 0,
 		Message: struct {
-			Role      string     `json:"role"`
-			Content   string     `json:"content"`
-			ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
+			Role      string              `json:"role"`
+			Content   string              `json:"content"`
+			ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
 		}{
 			Role:      "assistant",
 			Content:   "",
-			ToolCalls: []types.ToolCall{},
+			ToolCalls: []response.ToolCall{},
 		},
 	})
 
-	embeddingsResponse := &types.EmbeddingsResponse{
+	embeddingsResponse := &response.EmbeddingsResponse{
 		Model: "mock-model",
 	}
 	embeddingsResponse.Data = append(embeddingsResponse.Data, struct {

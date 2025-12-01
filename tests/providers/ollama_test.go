@@ -5,20 +5,14 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
 func TestNewOllama(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: "http://localhost:11434",
-		Model: &config.ModelConfig{
-			Name: "llama2",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 	}
 
 	provider, err := providers.NewOllama(cfg)
@@ -64,12 +58,6 @@ func TestNewOllama_URLSuffixHandling(t *testing.T) {
 			cfg := &config.ProviderConfig{
 				Name:    "ollama",
 				BaseURL: tt.baseURL,
-				Model: &config.ModelConfig{
-					Name: "llama2",
-					Capabilities: map[string]map[string]any{
-						"chat": {},
-					},
-				},
 			}
 
 			provider, err := providers.NewOllama(cfg)
@@ -77,10 +65,9 @@ func TestNewOllama_URLSuffixHandling(t *testing.T) {
 				t.Fatalf("NewOllama failed: %v", err)
 			}
 
-			// Test endpoint construction instead of BaseURL
-			endpoint, err := provider.GetEndpoint(types.Chat)
+			endpoint, err := provider.Endpoint(protocol.Chat)
 			if err != nil {
-				t.Fatalf("GetEndpoint failed: %v", err)
+				t.Fatalf("Endpoint failed: %v", err)
 			}
 
 			if endpoint != tt.expectedURL {
@@ -90,19 +77,10 @@ func TestNewOllama_URLSuffixHandling(t *testing.T) {
 	}
 }
 
-func TestOllama_GetEndpoint(t *testing.T) {
+func TestOllama_Endpoint(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: "http://localhost:11434",
-		Model: &config.ModelConfig{
-			Name: "llama2",
-			Capabilities: map[string]map[string]any{
-				"chat":       {},
-				"vision":     {},
-				"tools":      {},
-				"embeddings": {},
-			},
-		},
 	}
 
 	provider, err := providers.NewOllama(cfg)
@@ -111,33 +89,33 @@ func TestOllama_GetEndpoint(t *testing.T) {
 	}
 
 	tests := []struct {
-		protocol types.Protocol
+		protocol protocol.Protocol
 		expected string
 	}{
 		{
-			types.Chat,
+			protocol.Chat,
 			"http://localhost:11434/v1/chat/completions",
 		},
 		{
-			types.Vision,
+			protocol.Vision,
 			"http://localhost:11434/v1/chat/completions",
 		},
 		{
-			types.Tools,
+			protocol.Tools,
 			"http://localhost:11434/v1/chat/completions",
 		},
 		{
-			types.Embeddings,
+			protocol.Embeddings,
 			"http://localhost:11434/v1/embeddings",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(string(tt.protocol), func(t *testing.T) {
-			endpoint, err := provider.GetEndpoint(tt.protocol)
+			endpoint, err := provider.Endpoint(tt.protocol)
 
 			if err != nil {
-				t.Fatalf("GetEndpoint failed: %v", err)
+				t.Fatalf("Endpoint failed: %v", err)
 			}
 
 			if endpoint != tt.expected {
@@ -151,12 +129,6 @@ func TestOllama_PrepareRequest(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: "http://localhost:11434",
-		Model: &config.ModelConfig{
-			Name: "llama2",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 	}
 
 	provider, err := providers.NewOllama(cfg)
@@ -164,14 +136,25 @@ func TestOllama_PrepareRequest(t *testing.T) {
 		t.Fatalf("NewOllama failed: %v", err)
 	}
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
+	// Marshal chat data using the provider
+	chatData := &providers.ChatData{
+		Model: "llama2",
+		Messages: []protocol.Message{
+			protocol.NewMessage("user", "Hello"),
 		},
-		Options: map[string]any{"model": "llama2"},
+		Options: map[string]any{},
 	}
 
-	request, err := provider.PrepareRequest(context.Background(), chatRequest)
+	body, err := provider.Marshal(protocol.Chat, chatData)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	request, err := provider.PrepareRequest(context.Background(), protocol.Chat, body, headers)
 
 	if err != nil {
 		t.Fatalf("PrepareRequest failed: %v", err)
@@ -199,12 +182,6 @@ func TestOllama_PrepareStreamRequest(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: "http://localhost:11434",
-		Model: &config.ModelConfig{
-			Name: "llama2",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 	}
 
 	provider, err := providers.NewOllama(cfg)
@@ -212,14 +189,24 @@ func TestOllama_PrepareStreamRequest(t *testing.T) {
 		t.Fatalf("NewOllama failed: %v", err)
 	}
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
+	chatData := &providers.ChatData{
+		Model: "llama2",
+		Messages: []protocol.Message{
+			protocol.NewMessage("user", "Hello"),
 		},
-		Options: map[string]any{"model": "llama2", "stream": true},
+		Options: map[string]any{"stream": true},
 	}
 
-	request, err := provider.PrepareStreamRequest(context.Background(), chatRequest)
+	body, err := provider.Marshal(protocol.Chat, chatData)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	request, err := provider.PrepareStreamRequest(context.Background(), protocol.Chat, body, headers)
 
 	if err != nil {
 		t.Fatalf("PrepareStreamRequest failed: %v", err)

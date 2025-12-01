@@ -6,19 +6,21 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // MockProvider implements providers.Provider interface for testing.
 type MockProvider struct {
 	name     string
-	model    *types.Model
 	baseURL  string
 	headers  map[string]string
 	endpoint string
 
 	// Configurable responses
+	marshalResponse       []byte
+	marshalError          error
 	prepareResponse       *providers.Request
 	prepareError          error
 	processResponse       any
@@ -26,21 +28,17 @@ type MockProvider struct {
 	streamChunks          []any
 	streamError           error
 	endpointError         error
-	customEndpointMapping map[types.Protocol]string
+	customEndpointMapping map[protocol.Protocol]string
 }
 
 // NewMockProvider creates a new MockProvider with default configuration.
 func NewMockProvider(opts ...MockProviderOption) *MockProvider {
 	m := &MockProvider{
-		name: "mock-provider",
-		model: &types.Model{
-			Name:    "mock-model",
-			Options: make(map[types.Protocol]map[string]any),
-		},
+		name:                  "mock-provider",
 		baseURL:               "http://mock-provider.local",
 		headers:               make(map[string]string),
 		endpoint:              "/mock/endpoint",
-		customEndpointMapping: make(map[types.Protocol]string),
+		customEndpointMapping: make(map[protocol.Protocol]string),
 	}
 
 	for _, opt := range opts {
@@ -57,13 +55,6 @@ type MockProviderOption func(*MockProvider)
 func WithProviderName(name string) MockProviderOption {
 	return func(m *MockProvider) {
 		m.name = name
-	}
-}
-
-// WithProviderModel sets the model.
-func WithProviderModel(model *types.Model) MockProviderOption {
-	return func(m *MockProvider) {
-		m.model = model
 	}
 }
 
@@ -88,10 +79,18 @@ func WithEndpoint(endpoint string) MockProviderOption {
 	}
 }
 
-// WithEndpointMapping sets custom endpoint mapping for types.
-func WithEndpointMapping(mapping map[types.Protocol]string) MockProviderOption {
+// WithEndpointMapping sets custom endpoint mapping for protocols.
+func WithEndpointMapping(mapping map[protocol.Protocol]string) MockProviderOption {
 	return func(m *MockProvider) {
 		m.customEndpointMapping = mapping
+	}
+}
+
+// WithMarshalResponse sets the response for Marshal.
+func WithMarshalResponse(body []byte, err error) MockProviderOption {
+	return func(m *MockProvider) {
+		m.marshalResponse = body
+		m.marshalError = err
 	}
 }
 
@@ -119,7 +118,7 @@ func WithProviderStreamChunks(chunks []any, err error) MockProviderOption {
 	}
 }
 
-// WithEndpointError sets an error for GetEndpoint.
+// WithEndpointError sets an error for Endpoint.
 func WithEndpointError(err error) MockProviderOption {
 	return func(m *MockProvider) {
 		m.endpointError = err
@@ -131,19 +130,19 @@ func (m *MockProvider) Name() string {
 	return m.name
 }
 
-// Model returns the mock model.
-func (m *MockProvider) Model() *types.Model {
-	return m.model
+// BaseURL returns the base URL.
+func (m *MockProvider) BaseURL() string {
+	return m.baseURL
 }
 
-// GetEndpoint returns the configured endpoint for a protocol.
-func (m *MockProvider) GetEndpoint(protocol types.Protocol) (string, error) {
+// Endpoint returns the configured endpoint for a protocol.
+func (m *MockProvider) Endpoint(proto protocol.Protocol) (string, error) {
 	if m.endpointError != nil {
 		return "", m.endpointError
 	}
 
 	// Check custom mapping first
-	if endpoint, ok := m.customEndpointMapping[protocol]; ok {
+	if endpoint, ok := m.customEndpointMapping[proto]; ok {
 		return m.baseURL + endpoint, nil
 	}
 
@@ -158,8 +157,22 @@ func (m *MockProvider) SetHeaders(req *http.Request) {
 	}
 }
 
+// Marshal returns the predetermined marshaled body.
+func (m *MockProvider) Marshal(proto protocol.Protocol, data any) ([]byte, error) {
+	if m.marshalError != nil {
+		return nil, m.marshalError
+	}
+
+	if m.marshalResponse != nil {
+		return m.marshalResponse, nil
+	}
+
+	// Return empty JSON object as default
+	return []byte(`{}`), nil
+}
+
 // PrepareRequest returns the predetermined request.
-func (m *MockProvider) PrepareRequest(ctx context.Context, request types.ProtocolRequest) (*providers.Request, error) {
+func (m *MockProvider) PrepareRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*providers.Request, error) {
 	if m.prepareError != nil {
 		return nil, m.prepareError
 	}
@@ -169,18 +182,17 @@ func (m *MockProvider) PrepareRequest(ctx context.Context, request types.Protoco
 	}
 
 	// Return default request
-	protocol := request.GetProtocol()
-	endpoint, _ := m.GetEndpoint(protocol)
+	endpoint, _ := m.Endpoint(proto)
 	return &providers.Request{
 		URL:     endpoint,
 		Headers: map[string]string{"Content-Type": "application/json"},
-		Body:    []byte(`{}`),
+		Body:    body,
 	}, nil
 }
 
 // PrepareStreamRequest returns a prepared request with streaming headers.
-func (m *MockProvider) PrepareStreamRequest(ctx context.Context, request types.ProtocolRequest) (*providers.Request, error) {
-	req, err := m.PrepareRequest(ctx, request)
+func (m *MockProvider) PrepareStreamRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*providers.Request, error) {
+	req, err := m.PrepareRequest(ctx, proto, body, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +205,7 @@ func (m *MockProvider) PrepareStreamRequest(ctx context.Context, request types.P
 }
 
 // ProcessResponse returns the predetermined response.
-func (m *MockProvider) ProcessResponse(ctx context.Context, response *http.Response, protocol types.Protocol) (any, error) {
+func (m *MockProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
 	if m.processError != nil {
 		return nil, m.processError
 	}
@@ -203,16 +215,16 @@ func (m *MockProvider) ProcessResponse(ctx context.Context, response *http.Respo
 	}
 
 	// Read response body and use protocol parsing
-	body, err := io.ReadAll(response.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return types.ParseResponse(protocol, body)
+	return response.Parse(proto, body)
 }
 
 // ProcessStreamResponse returns a channel with predetermined chunks.
-func (m *MockProvider) ProcessStreamResponse(ctx context.Context, response *http.Response, protocol types.Protocol) (<-chan any, error) {
+func (m *MockProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
 	if m.streamError != nil {
 		return nil, m.streamError
 	}
