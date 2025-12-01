@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // AzureProvider implements Provider for Azure OpenAI Service.
@@ -24,7 +26,7 @@ type AzureProvider struct {
 
 // NewAzure creates a new AzureProvider from configuration.
 // Requires "deployment", "auth_type", "token", and "api_version" in options.
-// Returns an error if any required option is missing or model creation fails.
+// Returns an error if any required option is missing.
 func NewAzure(c *config.ProviderConfig) (Provider, error) {
 	deployment, ok := c.Options["deployment"].(string)
 	if !ok || deployment == "" {
@@ -46,10 +48,8 @@ func NewAzure(c *config.ProviderConfig) (Provider, error) {
 		return nil, fmt.Errorf("api_version is required for Azure provider")
 	}
 
-	model := types.FromConfig(c.Model)
-
 	return &AzureProvider{
-		BaseProvider: NewBaseProvider(c.Name, c.BaseURL, model),
+		BaseProvider: NewBaseProvider(c.Name, c.BaseURL),
 		deployment:   deployment,
 		authType:     authType,
 		token:        token,
@@ -57,69 +57,36 @@ func NewAzure(c *config.ProviderConfig) (Provider, error) {
 	}, nil
 }
 
-// GetEndpoint returns the full Azure OpenAI endpoint URL for a protocol.
+// Endpoint returns the full Azure OpenAI endpoint URL for a protocol.
 // Includes deployment name in path and api-version as query parameter.
 // Supports chat, vision, tools (all use /deployments/{deployment}/chat/completions),
 // and embeddings (/deployments/{deployment}/embeddings).
 // Returns an error if the protocol is not supported.
-func (p *AzureProvider) GetEndpoint(protocol types.Protocol) (string, error) {
+func (p *AzureProvider) Endpoint(proto protocol.Protocol) (string, error) {
 	basePath := fmt.Sprintf("/deployments/%s", p.deployment)
 
-	endpoints := map[types.Protocol]string{
-		types.Chat:       basePath + "/chat/completions",
-		types.Vision:     basePath + "/chat/completions",
-		types.Tools:      basePath + "/chat/completions",
-		types.Embeddings: basePath + "/embeddings",
+	endpoints := map[protocol.Protocol]string{
+		protocol.Chat:       basePath + "/chat/completions",
+		protocol.Vision:     basePath + "/chat/completions",
+		protocol.Tools:      basePath + "/chat/completions",
+		protocol.Embeddings: basePath + "/embeddings",
 	}
 
-	endpoint, exists := endpoints[protocol]
+	endpoint, exists := endpoints[proto]
 	if !exists {
-		return "", fmt.Errorf("protocol %s not supported by Azure", protocol)
+		return "", fmt.Errorf("protocol %s not supported by Azure", proto)
 	}
 
 	return fmt.Sprintf("%s%s?api-version=%s", p.BaseURL(), endpoint, p.apiVersion), nil
 }
 
 // PrepareRequest prepares a standard (non-streaming) Azure request.
-// Marshals the protocol request body and includes protocol headers.
-// Returns an error if the endpoint is invalid or marshaling fails.
-func (p *AzureProvider) PrepareRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error) {
-	protocol := request.GetProtocol()
-	endpoint, err := p.GetEndpoint(protocol)
+// Returns an error if the endpoint is invalid.
+func (p *AzureProvider) PrepareRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error) {
+	endpoint, err := p.Endpoint(proto)
 	if err != nil {
 		return nil, err
 	}
-
-	body, err := request.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	return &Request{
-		URL:     endpoint,
-		Headers: request.GetHeaders(),
-		Body:    body,
-	}, nil
-}
-
-// PrepareStreamRequest prepares a streaming Azure request.
-// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
-// Returns an error if the endpoint is invalid or marshaling fails.
-func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, request types.ProtocolRequest) (*Request, error) {
-	protocol := request.GetProtocol()
-	endpoint, err := p.GetEndpoint(protocol)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := request.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	headers := request.GetHeaders()
-	headers["Accept"] = "text/event-stream"
-	headers["Cache-Control"] = "no-cache"
 
 	return &Request{
 		URL:     endpoint,
@@ -128,10 +95,32 @@ func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, request types.
 	}, nil
 }
 
+// PrepareStreamRequest prepares a streaming Azure request.
+// Adds streaming-specific headers (Accept: text/event-stream, Cache-Control: no-cache).
+// Returns an error if the endpoint is invalid.
+func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error) {
+	endpoint, err := p.Endpoint(proto)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clone headers to avoid mutating the original
+	streamHeaders := make(map[string]string)
+	maps.Copy(streamHeaders, headers)
+	streamHeaders["Accept"] = "text/event-stream"
+	streamHeaders["Cache-Control"] = "no-cache"
+
+	return &Request{
+		URL:     endpoint,
+		Headers: streamHeaders,
+		Body:    body,
+	}, nil
+}
+
 // ProcessResponse processes a standard Azure HTTP response.
 // Returns an error if the HTTP status is not OK.
-// Uses types.ParseResponse for protocol-aware parsing.
-func (p *AzureProvider) ProcessResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (any, error) {
+// Uses response.Parse for protocol-aware parsing.
+func (p *AzureProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
@@ -142,7 +131,7 @@ func (p *AzureProvider) ProcessResponse(ctx context.Context, resp *http.Response
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return types.ParseResponse(protocol, body)
+	return response.Parse(proto, body)
 }
 
 // ProcessStreamResponse processes a streaming Azure HTTP response with SSE format.
@@ -150,7 +139,7 @@ func (p *AzureProvider) ProcessResponse(ctx context.Context, resp *http.Response
 // Returns a channel that emits parsed streaming chunks.
 // The channel is closed when the stream completes or context is cancelled.
 // Returns an error if the HTTP status is not OK.
-func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (<-chan any, error) {
+func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
@@ -171,7 +160,7 @@ func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Re
 			}
 			if err != nil {
 				select {
-				case output <- &types.StreamingChunk{Error: err}:
+				case output <- &response.StreamingChunk{Error: err}:
 				case <-ctx.Done():
 				}
 				return
@@ -194,7 +183,7 @@ func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Re
 				return
 			}
 
-			chunk, err := types.ParseStreamChunk(protocol, []byte(data))
+			chunk, err := response.ParseStreamChunk(proto, []byte(data))
 			if err != nil {
 				continue
 			}

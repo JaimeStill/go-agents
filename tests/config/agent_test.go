@@ -15,21 +15,21 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 		"name": "test-agent",
 		"system_prompt": "You are a helpful assistant",
 		"client": {
-			"provider": {
-				"name": "ollama",
-				"base_url": "http://localhost:11434",
-				"model": {
-					"name": "llama3.2:3b",
-					"capabilities": {
-						"chat": {
-							"temperature": 0.7
-						}
-					}
-				}
-			},
 			"timeout": "24s",
 			"retry": {
 				"max_retries": 3
+			}
+		},
+		"provider": {
+			"name": "ollama",
+			"base_url": "http://localhost:11434"
+		},
+		"model": {
+			"name": "llama3.2:3b",
+			"capabilities": {
+				"chat": {
+					"temperature": 0.7
+				}
 			}
 		}
 	}`
@@ -51,12 +51,20 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 		t.Fatal("client is nil")
 	}
 
-	if cfg.Client.Provider == nil {
+	if cfg.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Client.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama", cfg.Client.Provider.Name)
+	if cfg.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama", cfg.Provider.Name)
+	}
+
+	if cfg.Model == nil {
+		t.Fatal("model is nil")
+	}
+
+	if cfg.Model.Name != "llama3.2:3b" {
+		t.Errorf("got model name %s, want llama3.2:3b", cfg.Model.Name)
 	}
 }
 
@@ -65,27 +73,6 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 		Name:         "full-agent",
 		SystemPrompt: "Test system prompt",
 		Client: &config.ClientConfig{
-			Provider: &config.ProviderConfig{
-				Name:    "azure",
-				BaseURL: "https://example.openai.azure.com",
-				Model: &config.ModelConfig{
-					Name: "gpt-4",
-					Capabilities: map[string]map[string]any{
-						"chat": {
-							"temperature": 0.7,
-							"max_tokens":  4096,
-						},
-						"vision": {
-							"detail": "auto",
-						},
-					},
-				},
-				Options: map[string]any{
-					"deployment":  "gpt-4-deployment",
-					"api_version": "2024-08-01",
-					"auth_type":   "api_key",
-				},
-			},
 			Timeout: config.Duration(24 * time.Second),
 			Retry: config.RetryConfig{
 				MaxRetries:     3,
@@ -93,6 +80,27 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 			},
 			ConnectionPoolSize: 10,
 			ConnectionTimeout:  config.Duration(9 * time.Second),
+		},
+		Provider: &config.ProviderConfig{
+			Name:    "azure",
+			BaseURL: "https://example.openai.azure.com",
+			Options: map[string]any{
+				"deployment":  "gpt-4-deployment",
+				"api_version": "2024-08-01",
+				"auth_type":   "api_key",
+			},
+		},
+		Model: &config.ModelConfig{
+			Name: "gpt-4",
+			Capabilities: map[string]map[string]any{
+				"chat": {
+					"temperature": 0.7,
+					"max_tokens":  4096,
+				},
+				"vision": {
+					"detail": "auto",
+				},
+			},
 		},
 	}
 
@@ -104,12 +112,12 @@ func TestAgentConfig_FullConfiguration(t *testing.T) {
 		t.Errorf("got system_prompt %s, want 'Test system prompt'", cfg.SystemPrompt)
 	}
 
-	if cfg.Client.Provider.Model.Name != "gpt-4" {
-		t.Errorf("got model name %s, want gpt-4", cfg.Client.Provider.Model.Name)
+	if cfg.Model.Name != "gpt-4" {
+		t.Errorf("got model name %s, want gpt-4", cfg.Model.Name)
 	}
 
-	if len(cfg.Client.Provider.Model.Capabilities) != 2 {
-		t.Errorf("got %d capabilities, want 2", len(cfg.Client.Provider.Model.Capabilities))
+	if len(cfg.Model.Capabilities) != 2 {
+		t.Errorf("got %d capabilities, want 2", len(cfg.Model.Capabilities))
 	}
 }
 
@@ -128,12 +136,16 @@ func TestDefaultAgentConfig(t *testing.T) {
 		t.Fatal("client is nil")
 	}
 
-	if cfg.Client.Provider == nil {
+	if cfg.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Client.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama", cfg.Client.Provider.Name)
+	if cfg.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama", cfg.Provider.Name)
+	}
+
+	if cfg.Model == nil {
+		t.Fatal("model is nil")
 	}
 }
 
@@ -193,6 +205,42 @@ func TestAgentConfig_Merge(t *testing.T) {
 			},
 		},
 		{
+			name: "merge provider",
+			base: &config.AgentConfig{
+				Provider: &config.ProviderConfig{
+					Name: "base-provider",
+				},
+			},
+			source: &config.AgentConfig{
+				Provider: &config.ProviderConfig{
+					Name: "source-provider",
+				},
+			},
+			expected: &config.AgentConfig{
+				Provider: &config.ProviderConfig{
+					Name: "source-provider",
+				},
+			},
+		},
+		{
+			name: "merge model",
+			base: &config.AgentConfig{
+				Model: &config.ModelConfig{
+					Name: "base-model",
+				},
+			},
+			source: &config.AgentConfig{
+				Model: &config.ModelConfig{
+					Name: "source-model",
+				},
+			},
+			expected: &config.AgentConfig{
+				Model: &config.ModelConfig{
+					Name: "source-model",
+				},
+			},
+		},
+		{
 			name: "source empty name preserves base",
 			base: &config.AgentConfig{
 				Name: "base-agent",
@@ -238,6 +286,24 @@ func TestAgentConfig_Merge(t *testing.T) {
 					t.Errorf("got max_retries %d, want %d", tt.base.Client.Retry.MaxRetries, tt.expected.Client.Retry.MaxRetries)
 				}
 			}
+
+			if tt.expected.Provider != nil {
+				if tt.base.Provider == nil {
+					t.Fatal("provider is nil after merge")
+				}
+				if tt.base.Provider.Name != tt.expected.Provider.Name {
+					t.Errorf("got provider name %s, want %s", tt.base.Provider.Name, tt.expected.Provider.Name)
+				}
+			}
+
+			if tt.expected.Model != nil {
+				if tt.base.Model == nil {
+					t.Fatal("model is nil after merge")
+				}
+				if tt.base.Model.Name != tt.expected.Model.Name {
+					t.Errorf("got model name %s, want %s", tt.base.Model.Name, tt.expected.Model.Name)
+				}
+			}
 		})
 	}
 }
@@ -258,14 +324,14 @@ func TestLoadAgentConfig(t *testing.T) {
 				"name": "test-agent",
 				"system_prompt": "Test prompt",
 				"client": {
-					"provider": {
-						"name": "ollama",
-						"base_url": "http://localhost:11434",
-						"model": {
-							"name": "llama3.2:3b"
-						}
-					},
 					"timeout": "24s"
+				},
+				"provider": {
+					"name": "ollama",
+					"base_url": "http://localhost:11434"
+				},
+				"model": {
+					"name": "llama3.2:3b"
 				}
 			}`,
 			expectError: false,
@@ -355,11 +421,16 @@ func TestLoadAgentConfig_MergesWithDefaults(t *testing.T) {
 	}
 
 	// Should have default provider
-	if cfg.Client.Provider == nil {
+	if cfg.Provider == nil {
 		t.Fatal("provider is nil")
 	}
 
-	if cfg.Client.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama (from defaults)", cfg.Client.Provider.Name)
+	if cfg.Provider.Name != "ollama" {
+		t.Errorf("got provider name %s, want ollama (from defaults)", cfg.Provider.Name)
+	}
+
+	// Should have default model
+	if cfg.Model == nil {
+		t.Fatal("model is nil")
 	}
 }

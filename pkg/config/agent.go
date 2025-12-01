@@ -7,25 +7,29 @@ import (
 )
 
 // AgentConfig defines the complete configuration for an agent.
-// It includes the agent name, optional system prompt, and client configuration.
+// It includes the agent name, optional system prompt, optional client settings,
+// provider configuration, and model configuration.
 type AgentConfig struct {
-	Name         string        `json:"name"`
-	SystemPrompt string        `json:"system_prompt,omitempty"`
-	Client       *ClientConfig `json:"client,omitempty"`
+	Name         string          `json:"name"`
+	SystemPrompt string          `json:"system_prompt,omitempty"`
+	Client       *ClientConfig   `json:"client,omitempty"`
+	Provider     *ProviderConfig `json:"provider"`
+	Model        *ModelConfig    `json:"model"`
 }
 
 // DefaultAgentConfig creates an AgentConfig with default values.
 func DefaultAgentConfig() AgentConfig {
-	client := DefaultClientConfig()
 	return AgentConfig{
 		Name:         "default-agent",
 		SystemPrompt: "",
-		Client:       client,
+		Client:       DefaultClientConfig(),
+		Provider:     DefaultProviderConfig(),
+		Model:        DefaultModelConfig(),
 	}
 }
 
 // Merge combines the source AgentConfig into this AgentConfig.
-// Non-empty name, system_prompt, and client from source override the current values.
+// Non-empty values from source override the current values.
 func (c *AgentConfig) Merge(source *AgentConfig) {
 	if source.Name != "" {
 		c.Name = source.Name
@@ -40,6 +44,22 @@ func (c *AgentConfig) Merge(source *AgentConfig) {
 			c.Client = source.Client
 		} else {
 			c.Client.Merge(source.Client)
+		}
+	}
+
+	if source.Provider != nil {
+		if c.Provider == nil {
+			c.Provider = source.Provider
+		} else {
+			c.Provider.Merge(source.Provider)
+		}
+	}
+
+	if source.Model != nil {
+		if c.Model == nil {
+			c.Model = source.Model
+		} else {
+			c.Model.Merge(source.Model)
 		}
 	}
 }

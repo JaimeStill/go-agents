@@ -189,17 +189,19 @@ All documentation should be written in a clear, objective, and factual manner wi
 **Implementation**:
 - Package dependency layers (from low to high):
   - `pkg/config` (foundation-level, serves all layers)
-  - `pkg/protocols` (protocol types and request/response structures)
-  - `pkg/capabilities` (capability abstraction and registry)
-  - `pkg/models` (model definitions and format handling)
+  - `pkg/protocol` (protocol types and message structures)
+  - `pkg/response` (response parsing and types)
   - `pkg/providers` (provider-specific implementations)
-  - `pkg/transport` (client abstraction and HTTP orchestration)
+  - `pkg/model` (model runtime type, depends on protocol)
+  - `pkg/request` (request interface and types, depends on model, protocol, providers)
+  - `pkg/client` (client abstraction and HTTP orchestration)
   - `pkg/agent` (high-level agent functionality)
+  - `pkg/mock` (mock implementations for testing)
 - Lower layers must not import higher layers
 - Shared types should be defined in the lowest layer that needs them
 - Use interfaces to invert dependencies when needed
 
-**Example**: `pkg/providers` can import from `pkg/models`, `pkg/capabilities`, and `pkg/config`, but not from `pkg/transport` or `pkg/agent`. The `pkg/transport` layer orchestrates providers through interfaces.
+**Example**: `pkg/request` can import from `pkg/model`, `pkg/protocol`, `pkg/providers`, and `pkg/config`, but not from `pkg/client` or `pkg/agent`. The `pkg/client` layer executes requests through the `request.Request` interface.
 
 ### Implementation Guide Refactoring Order
 **Principle**: When creating implementation guides for refactoring, always structure changes to proceed from lowest-level packages to highest-level packages following the dependency hierarchy.
@@ -212,14 +214,16 @@ All documentation should be written in a clear, objective, and factual manner wi
 - Each step should result in a compilable state
 - Higher-level packages should only be refactored after all their dependencies are complete
 
-**Example**: When refactoring to a protocol-based architecture, update in this order:
+**Example**: When refactoring architecture, update in this order:
 1. `pkg/config` (configuration structures if needed)
-2. `pkg/protocols` (foundational protocol types)
-3. `pkg/capabilities` (capability system updates)
-4. `pkg/models` (model and format handling)
-5. `pkg/providers` (provider implementations)
-6. `pkg/transport` (client orchestration)
-7. `pkg/agent` (high-level interface)
+2. `pkg/protocol` (foundational protocol types)
+3. `pkg/response` (response parsing types)
+4. `pkg/providers` (provider implementations)
+5. `pkg/model` (model runtime type)
+6. `pkg/request` (request interface and types)
+7. `pkg/client` (client orchestration)
+8. `pkg/agent` (high-level interface)
+9. `pkg/mock` (mock implementations)
 
 ### Parameter Encapsulation
 **Principle**: If more than two parameters are needed for a function or method, encapsulate the parameters into a structure.
@@ -370,10 +374,10 @@ tests/
 │   ├── duration_test.go      # Tests for pkg/config/duration.go
 │   ├── options_test.go       # Tests for pkg/config/options.go
 │   └── agent_test.go         # Tests for pkg/config/agent.go
-├── protocols/
+├── protocol/
 │   └── protocol_test.go
-└── capabilities/
-    └── chat_test.go
+└── response/
+    └── response_test.go
 ```
 
 ### Black-Box Testing Approach
@@ -465,20 +469,20 @@ func TestExtractOption(t *testing.T) {
 ```go
 func TestOllama_Request(t *testing.T) {
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Verify request
         if r.Method != "POST" {
             t.Errorf("expected POST, got %s", r.Method)
         }
 
-        // Send mock response
-        response := protocols.ChatResponse{
-            Choices: []struct{
-                Message protocols.Message
-            }{
-                {Message: protocols.NewMessage("assistant", "Test response")},
-            },
-        }
-        json.NewEncoder(w).Encode(response)
+        resp := response.ChatResponse{Model: "test-model"}
+        resp.Choices = append(resp.Choices, struct {
+            Index        int
+            Message      protocol.Message
+            FinishReason string
+        }{
+            Index:   0,
+            Message: protocol.NewMessage("assistant", "Test response"),
+        })
+        json.NewEncoder(w).Encode(resp)
     }))
     defer server.Close()
 

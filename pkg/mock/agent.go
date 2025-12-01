@@ -5,8 +5,10 @@ import (
 
 	"github.com/JaimeStill/go-agents/pkg/agent"
 	"github.com/JaimeStill/go-agents/pkg/client"
+	"github.com/JaimeStill/go-agents/pkg/model"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // MockAgent implements agent.Agent interface for testing.
@@ -15,22 +17,23 @@ type MockAgent struct {
 	id string
 
 	// Protocol responses
-	chatResponse       *types.ChatResponse
+	chatResponse       *response.ChatResponse
 	chatError          error
-	visionResponse     *types.ChatResponse
+	visionResponse     *response.ChatResponse
 	visionError        error
-	toolsResponse      *types.ToolsResponse
+	toolsResponse      *response.ToolsResponse
 	toolsError         error
-	embeddingsResponse *types.EmbeddingsResponse
+	embeddingsResponse *response.EmbeddingsResponse
 	embeddingsError    error
 
 	// Streaming responses
-	streamChunks []types.StreamingChunk
+	streamChunks []response.StreamingChunk
 	streamError  error
 
 	// Dependencies
-	client   client.Client
-	provider providers.Provider
+	mockClient   client.Client
+	mockProvider providers.Provider
+	mockModel    *model.Model
 }
 
 // NewMockAgent creates a new MockAgent with default configuration.
@@ -38,9 +41,13 @@ type MockAgent struct {
 func NewMockAgent(opts ...MockAgentOption) *MockAgent {
 	m := &MockAgent{
 		id:           "mock-agent-id",
-		client:       NewMockClient(),
-		provider:     NewMockProvider(),
-		streamChunks: []types.StreamingChunk{},
+		mockClient:   NewMockClient(),
+		mockProvider: NewMockProvider(),
+		mockModel: &model.Model{
+			Name:    "mock-model",
+			Options: make(map[protocol.Protocol]map[string]any),
+		},
+		streamChunks: []response.StreamingChunk{},
 	}
 
 	for _, opt := range opts {
@@ -61,39 +68,39 @@ func WithID(id string) MockAgentOption {
 }
 
 // WithChatResponse sets the chat response and error.
-func WithChatResponse(response *types.ChatResponse, err error) MockAgentOption {
+func WithChatResponse(resp *response.ChatResponse, err error) MockAgentOption {
 	return func(m *MockAgent) {
-		m.chatResponse = response
+		m.chatResponse = resp
 		m.chatError = err
 	}
 }
 
 // WithVisionResponse sets the vision response and error.
-func WithVisionResponse(response *types.ChatResponse, err error) MockAgentOption {
+func WithVisionResponse(resp *response.ChatResponse, err error) MockAgentOption {
 	return func(m *MockAgent) {
-		m.visionResponse = response
+		m.visionResponse = resp
 		m.visionError = err
 	}
 }
 
 // WithToolsResponse sets the tools response and error.
-func WithToolsResponse(response *types.ToolsResponse, err error) MockAgentOption {
+func WithToolsResponse(resp *response.ToolsResponse, err error) MockAgentOption {
 	return func(m *MockAgent) {
-		m.toolsResponse = response
+		m.toolsResponse = resp
 		m.toolsError = err
 	}
 }
 
 // WithEmbeddingsResponse sets the embeddings response and error.
-func WithEmbeddingsResponse(response *types.EmbeddingsResponse, err error) MockAgentOption {
+func WithEmbeddingsResponse(resp *response.EmbeddingsResponse, err error) MockAgentOption {
 	return func(m *MockAgent) {
-		m.embeddingsResponse = response
+		m.embeddingsResponse = resp
 		m.embeddingsError = err
 	}
 }
 
 // WithStreamChunks sets the streaming chunks for stream methods.
-func WithStreamChunks(chunks []types.StreamingChunk, err error) MockAgentOption {
+func WithStreamChunks(chunks []response.StreamingChunk, err error) MockAgentOption {
 	return func(m *MockAgent) {
 		m.streamChunks = chunks
 		m.streamError = err
@@ -103,14 +110,21 @@ func WithStreamChunks(chunks []types.StreamingChunk, err error) MockAgentOption 
 // WithClient sets a custom client.
 func WithClient(c client.Client) MockAgentOption {
 	return func(m *MockAgent) {
-		m.client = c
+		m.mockClient = c
 	}
 }
 
 // WithProvider sets a custom provider.
-func WithProvider(provider providers.Provider) MockAgentOption {
+func WithProvider(p providers.Provider) MockAgentOption {
 	return func(m *MockAgent) {
-		m.provider = provider
+		m.mockProvider = p
+	}
+}
+
+// WithModel sets a custom model.
+func WithModel(mdl *model.Model) MockAgentOption {
+	return func(m *MockAgent) {
+		m.mockModel = mdl
 	}
 }
 
@@ -121,38 +135,31 @@ func (m *MockAgent) ID() string {
 
 // Client returns the mock client.
 func (m *MockAgent) Client() client.Client {
-	return m.client
+	return m.mockClient
 }
 
 // Provider returns the mock provider.
 func (m *MockAgent) Provider() providers.Provider {
-	return m.provider
+	return m.mockProvider
 }
 
-// Model returns the mock model from the provider.
-func (m *MockAgent) Model() *types.Model {
-	if m.provider != nil {
-		return m.provider.Model()
-	}
-	// Return default model if no provider
-	return &types.Model{
-		Name:    "mock-model",
-		Options: make(map[types.Protocol]map[string]any),
-	}
+// Model returns the mock model.
+func (m *MockAgent) Model() *model.Model {
+	return m.mockModel
 }
 
 // Chat returns the predetermined chat response.
-func (m *MockAgent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*types.ChatResponse, error) {
+func (m *MockAgent) Chat(ctx context.Context, prompt string, opts ...map[string]any) (*response.ChatResponse, error) {
 	return m.chatResponse, m.chatError
 }
 
 // ChatStream returns a channel with predetermined streaming chunks.
-func (m *MockAgent) ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan *types.StreamingChunk, error) {
+func (m *MockAgent) ChatStream(ctx context.Context, prompt string, opts ...map[string]any) (<-chan *response.StreamingChunk, error) {
 	if m.streamError != nil {
 		return nil, m.streamError
 	}
 
-	ch := make(chan *types.StreamingChunk, len(m.streamChunks))
+	ch := make(chan *response.StreamingChunk, len(m.streamChunks))
 	for i := range m.streamChunks {
 		ch <- &m.streamChunks[i]
 	}
@@ -162,17 +169,17 @@ func (m *MockAgent) ChatStream(ctx context.Context, prompt string, opts ...map[s
 }
 
 // Vision returns the predetermined vision response.
-func (m *MockAgent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*types.ChatResponse, error) {
+func (m *MockAgent) Vision(ctx context.Context, prompt string, images []string, opts ...map[string]any) (*response.ChatResponse, error) {
 	return m.visionResponse, m.visionError
 }
 
 // VisionStream returns a channel with predetermined streaming chunks.
-func (m *MockAgent) VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan *types.StreamingChunk, error) {
+func (m *MockAgent) VisionStream(ctx context.Context, prompt string, images []string, opts ...map[string]any) (<-chan *response.StreamingChunk, error) {
 	if m.streamError != nil {
 		return nil, m.streamError
 	}
 
-	ch := make(chan *types.StreamingChunk, len(m.streamChunks))
+	ch := make(chan *response.StreamingChunk, len(m.streamChunks))
 	for i := range m.streamChunks {
 		ch <- &m.streamChunks[i]
 	}
@@ -182,12 +189,12 @@ func (m *MockAgent) VisionStream(ctx context.Context, prompt string, images []st
 }
 
 // Tools returns the predetermined tools response.
-func (m *MockAgent) Tools(ctx context.Context, prompt string, tools []agent.Tool, opts ...map[string]any) (*types.ToolsResponse, error) {
+func (m *MockAgent) Tools(ctx context.Context, prompt string, tools []agent.Tool, opts ...map[string]any) (*response.ToolsResponse, error) {
 	return m.toolsResponse, m.toolsError
 }
 
 // Embed returns the predetermined embeddings response.
-func (m *MockAgent) Embed(ctx context.Context, input string, opts ...map[string]any) (*types.EmbeddingsResponse, error) {
+func (m *MockAgent) Embed(ctx context.Context, input string, opts ...map[string]any) (*response.EmbeddingsResponse, error) {
 	return m.embeddingsResponse, m.embeddingsError
 }
 

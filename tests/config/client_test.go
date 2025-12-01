@@ -10,13 +10,6 @@ import (
 
 func TestClientConfig_Unmarshal(t *testing.T) {
 	jsonData := `{
-		"provider": {
-			"name": "ollama",
-			"base_url": "http://localhost:11434",
-			"model": {
-				"name": "llama3.2:3b"
-			}
-		},
 		"timeout": "24s",
 		"retry": {
 			"max_retries": 3,
@@ -32,14 +25,6 @@ func TestClientConfig_Unmarshal(t *testing.T) {
 	var cfg config.ClientConfig
 	if err := json.Unmarshal([]byte(jsonData), &cfg); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
-	}
-
-	if cfg.Provider == nil {
-		t.Fatal("provider is nil")
-	}
-
-	if cfg.Provider.Name != "ollama" {
-		t.Errorf("got provider name %s, want ollama", cfg.Provider.Name)
 	}
 
 	if cfg.Timeout.ToDuration() != 24*time.Second {
@@ -80,10 +65,6 @@ func TestClientConfig_Defaults(t *testing.T) {
 
 	if cfg == nil {
 		t.Fatal("DefaultClientConfig returned nil")
-	}
-
-	if cfg.Provider == nil {
-		t.Fatal("provider is nil")
 	}
 
 	if cfg.Timeout.ToDuration() != 2*time.Minute {
@@ -237,24 +218,6 @@ func TestClientConfig_Merge(t *testing.T) {
 			},
 		},
 		{
-			name: "merge provider",
-			base: &config.ClientConfig{
-				Provider: &config.ProviderConfig{
-					Name: "base-provider",
-				},
-			},
-			source: &config.ClientConfig{
-				Provider: &config.ProviderConfig{
-					Name: "source-provider",
-				},
-			},
-			expected: &config.ClientConfig{
-				Provider: &config.ProviderConfig{
-					Name: "source-provider",
-				},
-			},
-		},
-		{
 			name: "zero values preserve base",
 			base: &config.ClientConfig{
 				Timeout:            config.Duration(1 * time.Minute),
@@ -295,15 +258,6 @@ func TestClientConfig_Merge(t *testing.T) {
 
 			if tt.base.ConnectionTimeout != tt.expected.ConnectionTimeout {
 				t.Errorf("got connection_timeout %v, want %v", tt.base.ConnectionTimeout, tt.expected.ConnectionTimeout)
-			}
-
-			if tt.expected.Provider != nil {
-				if tt.base.Provider == nil {
-					t.Fatal("provider is nil after merge")
-				}
-				if tt.base.Provider.Name != tt.expected.Provider.Name {
-					t.Errorf("got provider name %s, want %s", tt.base.Provider.Name, tt.expected.Provider.Name)
-				}
 			}
 		})
 	}

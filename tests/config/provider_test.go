@@ -11,14 +11,6 @@ func TestProviderConfig_Unmarshal(t *testing.T) {
 	jsonData := `{
 		"name": "azure",
 		"base_url": "https://example.openai.azure.com",
-		"model": {
-			"name": "gpt-4",
-			"capabilities": {
-				"chat": {
-					"format": "openai-chat"
-				}
-			}
-		},
 		"options": {
 			"deployment": "gpt-4-deployment",
 			"api_version": "2024-08-01"
@@ -38,16 +30,16 @@ func TestProviderConfig_Unmarshal(t *testing.T) {
 		t.Errorf("got base_url %s, want https://example.openai.azure.com", cfg.BaseURL)
 	}
 
-	if cfg.Model == nil {
-		t.Fatal("model is nil")
-	}
-
-	if cfg.Model.Name != "gpt-4" {
-		t.Errorf("got model name %s, want gpt-4", cfg.Model.Name)
-	}
-
 	if len(cfg.Options) != 2 {
 		t.Errorf("got %d options, want 2", len(cfg.Options))
+	}
+
+	deployment, exists := cfg.Options["deployment"]
+	if !exists {
+		t.Fatal("deployment option not found")
+	}
+	if deployment != "gpt-4-deployment" {
+		t.Errorf("got deployment %v, want gpt-4-deployment", deployment)
 	}
 }
 
@@ -88,10 +80,6 @@ func TestDefaultProviderConfig(t *testing.T) {
 
 	if cfg.BaseURL != "http://localhost:11434" {
 		t.Errorf("got base_url %s, want http://localhost:11434", cfg.BaseURL)
-	}
-
-	if cfg.Model == nil {
-		t.Fatal("model is nil")
 	}
 
 	if cfg.Options == nil {
@@ -150,24 +138,6 @@ func TestProviderConfig_Merge(t *testing.T) {
 			},
 		},
 		{
-			name: "merge model",
-			base: &config.ProviderConfig{
-				Model: &config.ModelConfig{
-					Name: "base-model",
-				},
-			},
-			source: &config.ProviderConfig{
-				Model: &config.ModelConfig{
-					Name: "source-model",
-				},
-			},
-			expected: &config.ProviderConfig{
-				Model: &config.ModelConfig{
-					Name: "source-model",
-				},
-			},
-		},
-		{
 			name: "source empty name preserves base",
 			base: &config.ProviderConfig{
 				Name: "base-provider",
@@ -177,6 +147,26 @@ func TestProviderConfig_Merge(t *testing.T) {
 			},
 			expected: &config.ProviderConfig{
 				Name: "base-provider",
+			},
+		},
+		{
+			name: "merge overlapping options",
+			base: &config.ProviderConfig{
+				Options: map[string]any{
+					"deployment":  "base-deployment",
+					"api_version": "2024-01-01",
+				},
+			},
+			source: &config.ProviderConfig{
+				Options: map[string]any{
+					"deployment": "source-deployment",
+				},
+			},
+			expected: &config.ProviderConfig{
+				Options: map[string]any{
+					"deployment":  "source-deployment",
+					"api_version": "2024-01-01",
+				},
 			},
 		},
 	}
@@ -191,15 +181,6 @@ func TestProviderConfig_Merge(t *testing.T) {
 
 			if tt.base.BaseURL != tt.expected.BaseURL {
 				t.Errorf("got base_url %s, want %s", tt.base.BaseURL, tt.expected.BaseURL)
-			}
-
-			if tt.expected.Model != nil {
-				if tt.base.Model == nil {
-					t.Fatal("model is nil after merge")
-				}
-				if tt.base.Model.Name != tt.expected.Model.Name {
-					t.Errorf("got model name %s, want %s", tt.base.Model.Name, tt.expected.Model.Name)
-				}
 			}
 
 			for key, expectedValue := range tt.expected.Options {

@@ -3,14 +3,12 @@ package config
 import "time"
 
 // ClientConfig defines the configuration for the HTTP client layer.
-// It includes provider configuration, timeout settings, retry behavior,
-// and connection pooling parameters.
+// It includes timeout settings, retry behavior, and connection pooling parameters.
 type ClientConfig struct {
-	Provider          *ProviderConfig `json:"provider"`
-	Timeout           Duration        `json:"timeout"`
-	Retry             RetryConfig     `json:"retry"`
-	ConnectionPoolSize int            `json:"connection_pool_size"`
-	ConnectionTimeout Duration        `json:"connection_timeout"`
+	Timeout            Duration    `json:"timeout"`
+	Retry              RetryConfig `json:"retry"`
+	ConnectionPoolSize int         `json:"connection_pool_size"`
+	ConnectionTimeout  Duration    `json:"connection_timeout"`
 }
 
 // RetryConfig configures retry behavior for failed requests.
@@ -26,7 +24,6 @@ type RetryConfig struct {
 // DefaultClientConfig creates a ClientConfig with default values.
 func DefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		Provider:           DefaultProviderConfig(),
 		Timeout:            Duration(2 * time.Minute),
 		Retry:              DefaultRetryConfig(),
 		ConnectionPoolSize: 10,
@@ -78,13 +75,5 @@ func (c *ClientConfig) Merge(source *ClientConfig) {
 
 	if source.ConnectionTimeout > 0 {
 		c.ConnectionTimeout = source.ConnectionTimeout
-	}
-
-	if source.Provider != nil {
-		if c.Provider == nil {
-			c.Provider = source.Provider
-		} else {
-			c.Provider.Merge(source.Provider)
-		}
 	}
 }

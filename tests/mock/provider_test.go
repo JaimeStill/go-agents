@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/mock"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
 func TestNewMockProvider(t *testing.T) {
@@ -25,10 +25,10 @@ func TestMockProvider_Name(t *testing.T) {
 	}
 }
 
-func TestMockProvider_GetEndpoint(t *testing.T) {
-	customEndpoints := map[types.Protocol]string{
-		types.Chat:   "/chat",
-		types.Vision: "/vision",
+func TestMockProvider_Endpoint(t *testing.T) {
+	customEndpoints := map[protocol.Protocol]string{
+		protocol.Chat:   "/chat",
+		protocol.Vision: "/vision",
 	}
 
 	provider := mock.NewMockProvider(
@@ -36,10 +36,10 @@ func TestMockProvider_GetEndpoint(t *testing.T) {
 		mock.WithEndpointMapping(customEndpoints),
 	)
 
-	endpoint, err := provider.GetEndpoint(types.Chat)
+	endpoint, err := provider.Endpoint(protocol.Chat)
 
 	if err != nil {
-		t.Fatalf("GetEndpoint failed: %v", err)
+		t.Fatalf("Endpoint failed: %v", err)
 	}
 
 	if endpoint != "https://custom.api/chat" {
@@ -58,14 +58,7 @@ func TestMockProvider_PrepareRequest(t *testing.T) {
 		mock.WithPrepareResponse(expectedRequest, nil),
 	)
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
-		},
-		Options: map[string]any{"model": "test"},
-	}
-
-	request, err := provider.PrepareRequest(context.Background(), chatRequest)
+	request, err := provider.PrepareRequest(context.Background(), protocol.Chat, []byte(`{}`), nil)
 
 	if err != nil {
 		t.Fatalf("PrepareRequest failed: %v", err)
@@ -76,16 +69,30 @@ func TestMockProvider_PrepareRequest(t *testing.T) {
 	}
 }
 
-func TestMockProvider_Model(t *testing.T) {
-	provider := mock.NewMockProvider()
+func TestMockProvider_Marshal(t *testing.T) {
+	expectedBody := []byte(`{"model":"test-model"}`)
 
-	model := provider.Model()
+	provider := mock.NewMockProvider(
+		mock.WithMarshalResponse(expectedBody, nil),
+	)
 
-	if model == nil {
-		t.Error("Model() returned nil")
+	body, err := provider.Marshal(protocol.Chat, nil)
+
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	if model.Name != "mock-model" {
-		t.Errorf("got model name %q, want %q", model.Name, "mock-model")
+	if string(body) != string(expectedBody) {
+		t.Errorf("got body %q, want %q", string(body), string(expectedBody))
+	}
+}
+
+func TestMockProvider_BaseURL(t *testing.T) {
+	provider := mock.NewMockProvider(
+		mock.WithBaseURL("https://custom.api"),
+	)
+
+	if provider.BaseURL() != "https://custom.api" {
+		t.Errorf("got baseURL %q, want %q", provider.BaseURL(), "https://custom.api")
 	}
 }

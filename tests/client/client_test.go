@@ -10,170 +10,68 @@ import (
 
 	"github.com/JaimeStill/go-agents/pkg/client"
 	"github.com/JaimeStill/go-agents/pkg/config"
-	"github.com/JaimeStill/go-agents/pkg/types"
+	"github.com/JaimeStill/go-agents/pkg/model"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
+	"github.com/JaimeStill/go-agents/pkg/providers"
+	"github.com/JaimeStill/go-agents/pkg/request"
+	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 func TestNew(t *testing.T) {
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-				Capabilities: map[string]map[string]any{
-					"chat": {
-						"temperature": 0.7,
-					},
-				},
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
 	}
 
-	c, err := client.New(cfg)
-
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	c := client.New(cfg)
 
 	if c == nil {
 		t.Fatal("New returned nil client")
 	}
 }
 
-func TestNew_InvalidProvider(t *testing.T) {
-	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "unknown-provider",
-			BaseURL: "http://localhost",
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
-		Timeout:            config.Duration(30 * time.Second),
-		ConnectionTimeout:  config.Duration(10 * time.Second),
-		ConnectionPoolSize: 10,
-	}
-
-	_, err := client.New(cfg)
-
-	if err == nil {
-		t.Error("expected error for unknown provider, got nil")
-	}
-}
-
-func TestClient_Provider(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
-		Timeout:            config.Duration(30 * time.Second),
-		ConnectionTimeout:  config.Duration(10 * time.Second),
-		ConnectionPoolSize: 10,
-	}
-
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-
-	provider := c.Provider()
-
-	if provider == nil {
-		t.Fatal("Provider() returned nil")
-	}
-
-	if provider.Name() != "ollama" {
-		t.Errorf("got provider name %q, want %q", provider.Name(), "ollama")
-	}
-}
-
-func TestClient_Model(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
-		Timeout:            config.Duration(30 * time.Second),
-		ConnectionTimeout:  config.Duration(10 * time.Second),
-		ConnectionPoolSize: 10,
-	}
-
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-
-	model := c.Model()
-
-	if model == nil {
-		t.Fatal("Model() returned nil")
-	}
-
-	if model.Name != "test-model" {
-		t.Errorf("got model name %q, want %q", model.Name, "test-model")
-	}
-}
-
-func TestClient_ExecuteProtocol_Chat(t *testing.T) {
+func TestClient_Execute_Chat(t *testing.T) {
 	// Create mock server that returns a valid chat response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := types.ChatResponse{
+		chatResp := response.ChatResponse{
 			Model: "test-model",
-			Choices: []struct {
-				Index        int            `json:"index"`
-				Message      types.Message  `json:"message"`
-				Delta        *struct {
-					Role    string `json:"role,omitempty"`
-					Content string `json:"content,omitempty"`
-				} `json:"delta,omitempty"`
-				FinishReason string `json:"finish_reason,omitempty"`
-			}{
-				{
-					Index:   0,
-					Message: types.NewMessage("assistant", "Hello, world!"),
-				},
-			},
 		}
+		chatResp.Choices = append(chatResp.Choices, struct {
+			Index   int              `json:"index"`
+			Message protocol.Message `json:"message"`
+			Delta   *struct {
+				Role    string `json:"role,omitempty"`
+				Content string `json:"content,omitempty"`
+			} `json:"delta,omitempty"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		}{
+			Index:   0,
+			Message: protocol.NewMessage("assistant", "Hello, world!"),
+		})
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(chatResp)
 	}))
 	defer server.Close()
 
+	// Create provider pointing to mock server
+	providerCfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: server.URL,
+	}
+	provider, err := providers.NewOllama(providerCfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	// Create model
+	mdl := model.New(&config.ModelConfig{
+		Name: "test-model",
+	})
+
+	// Create client
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
@@ -181,87 +79,85 @@ func TestClient_ExecuteProtocol_Chat(t *testing.T) {
 			MaxRetries: 0, // Disable retry for this test
 		},
 	}
+	c := client.New(cfg)
 
-	c, err := client.New(cfg)
+	// Create request
+	messages := []protocol.Message{
+		protocol.NewMessage("user", "Hello"),
+	}
+	req := request.NewChat(provider, mdl, messages, map[string]any{})
+
+	// Execute
+	result, err := c.Execute(context.Background(), req)
 	if err != nil {
-		t.Fatalf("New failed: %v", err)
+		t.Fatalf("Execute failed: %v", err)
 	}
 
-	messages := []types.Message{
-		types.NewMessage("user", "Hello"),
-	}
-
-	request := &types.ChatRequest{
-		Messages: messages,
-		Options:  map[string]any{"model": "test-model"},
-	}
-
-	result, err := c.ExecuteProtocol(context.Background(), request)
-	if err != nil {
-		t.Fatalf("ExecuteProtocol failed: %v", err)
-	}
-
-	response, ok := result.(*types.ChatResponse)
+	chatResp, ok := result.(*response.ChatResponse)
 	if !ok {
-		t.Fatalf("expected *types.ChatResponse, got %T", result)
+		t.Fatalf("expected *response.ChatResponse, got %T", result)
 	}
 
-	if response.Content() != "Hello, world!" {
-		t.Errorf("got content %q, want %q", response.Content(), "Hello, world!")
+	if chatResp.Content() != "Hello, world!" {
+		t.Errorf("got content %q, want %q", chatResp.Content(), "Hello, world!")
 	}
 }
 
-func TestClient_ExecuteProtocol_Tools(t *testing.T) {
+func TestClient_Execute_Tools(t *testing.T) {
 	// Create mock server that returns a valid tools response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := types.ToolsResponse{
+		toolsResp := response.ToolsResponse{
 			Model: "test-model",
-			Choices: []struct {
-				Index   int `json:"index"`
-				Message struct {
-					Role      string           `json:"role"`
-					Content   string           `json:"content"`
-					ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
-				} `json:"message"`
-				FinishReason string `json:"finish_reason,omitempty"`
+		}
+		toolsResp.Choices = append(toolsResp.Choices, struct {
+			Index   int `json:"index"`
+			Message struct {
+				Role      string              `json:"role"`
+				Content   string              `json:"content"`
+				ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		}{
+			Index: 0,
+			Message: struct {
+				Role      string              `json:"role"`
+				Content   string              `json:"content"`
+				ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
 			}{
-				{
-					Index: 0,
-					Message: struct {
-						Role      string           `json:"role"`
-						Content   string           `json:"content"`
-						ToolCalls []types.ToolCall `json:"tool_calls,omitempty"`
-					}{
-						Role:    "assistant",
-						Content: "",
-						ToolCalls: []types.ToolCall{
-							{
-								ID:   "call_123",
-								Type: "function",
-								Function: types.ToolCallFunction{
-									Name:      "get_weather",
-									Arguments: `{"location":"Boston"}`,
-								},
-							},
+				Role:    "assistant",
+				Content: "",
+				ToolCalls: []response.ToolCall{
+					{
+						ID:   "call_123",
+						Type: "function",
+						Function: response.ToolCallFunction{
+							Name:      "get_weather",
+							Arguments: `{"location":"Boston"}`,
 						},
 					},
 				},
 			},
-		}
+		})
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(toolsResp)
 	}))
 	defer server.Close()
 
+	providerCfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: server.URL,
+	}
+	provider, err := providers.NewOllama(providerCfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	mdl := model.New(&config.ModelConfig{
+		Name: "test-model",
+	})
+
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
@@ -269,92 +165,90 @@ func TestClient_ExecuteProtocol_Tools(t *testing.T) {
 			MaxRetries: 0,
 		},
 	}
+	c := client.New(cfg)
 
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
+	messages := []protocol.Message{
+		protocol.NewMessage("user", "What's the weather in Boston?"),
 	}
 
-	messages := []types.Message{
-		types.NewMessage("user", "What's the weather in Boston?"),
-	}
-
-	request := &types.ToolsRequest{
-		Messages: messages,
-		Tools: []types.ToolDefinition{
-			{
-				Name:        "get_weather",
-				Description: "Get current weather for a location",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"location": map[string]any{
-							"type":        "string",
-							"description": "City name",
-						},
+	tools := []providers.ToolDefinition{
+		{
+			Name:        "get_weather",
+			Description: "Get current weather for a location",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"location": map[string]any{
+						"type":        "string",
+						"description": "City name",
 					},
 				},
 			},
 		},
-		Options: map[string]any{"model": "test-model"},
 	}
 
-	result, err := c.ExecuteProtocol(context.Background(), request)
+	req := request.NewTools(provider, mdl, messages, tools, map[string]any{})
+
+	result, err := c.Execute(context.Background(), req)
 	if err != nil {
-		t.Fatalf("ExecuteProtocol failed: %v", err)
+		t.Fatalf("Execute failed: %v", err)
 	}
 
-	response, ok := result.(*types.ToolsResponse)
+	toolsResp, ok := result.(*response.ToolsResponse)
 	if !ok {
-		t.Fatalf("expected *types.ToolsResponse, got %T", result)
+		t.Fatalf("expected *response.ToolsResponse, got %T", result)
 	}
 
-	if len(response.Choices) == 0 {
+	if len(toolsResp.Choices) == 0 {
 		t.Fatal("no choices in response")
 	}
 
-	if len(response.Choices[0].Message.ToolCalls) == 0 {
+	if len(toolsResp.Choices[0].Message.ToolCalls) == 0 {
 		t.Fatal("no tool calls in response")
 	}
 
-	toolCall := response.Choices[0].Message.ToolCalls[0]
+	toolCall := toolsResp.Choices[0].Message.ToolCalls[0]
 	if toolCall.Function.Name != "get_weather" {
 		t.Errorf("got function name %q, want %q", toolCall.Function.Name, "get_weather")
 	}
 }
 
-func TestClient_ExecuteProtocol_Embeddings(t *testing.T) {
+func TestClient_Execute_Embeddings(t *testing.T) {
 	// Create mock server that returns a valid embeddings response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := types.EmbeddingsResponse{
+		embResp := response.EmbeddingsResponse{
 			Object: "list",
 			Model:  "test-model",
-			Data: []struct {
-				Embedding []float64 `json:"embedding"`
-				Index     int       `json:"index"`
-				Object    string    `json:"object"`
-			}{
-				{
-					Embedding: []float64{0.1, 0.2, 0.3},
-					Index:     0,
-					Object:    "embedding",
-				},
-			},
 		}
+		embResp.Data = append(embResp.Data, struct {
+			Embedding []float64 `json:"embedding"`
+			Index     int       `json:"index"`
+			Object    string    `json:"object"`
+		}{
+			Embedding: []float64{0.1, 0.2, 0.3},
+			Index:     0,
+			Object:    "embedding",
+		})
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(embResp)
 	}))
 	defer server.Close()
 
+	providerCfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: server.URL,
+	}
+	provider, err := providers.NewOllama(providerCfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	mdl := model.New(&config.ModelConfig{
+		Name: "test-model",
+	})
+
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
@@ -362,37 +256,30 @@ func TestClient_ExecuteProtocol_Embeddings(t *testing.T) {
 			MaxRetries: 0,
 		},
 	}
+	c := client.New(cfg)
 
-	c, err := client.New(cfg)
+	req := request.NewEmbeddings(provider, mdl, "Hello, world!", map[string]any{})
+
+	result, err := c.Execute(context.Background(), req)
 	if err != nil {
-		t.Fatalf("New failed: %v", err)
+		t.Fatalf("Execute failed: %v", err)
 	}
 
-	request := &types.EmbeddingsRequest{
-		Input:   "Hello, world!",
-		Options: map[string]any{"model": "test-model"},
-	}
-
-	result, err := c.ExecuteProtocol(context.Background(), request)
-	if err != nil {
-		t.Fatalf("ExecuteProtocol failed: %v", err)
-	}
-
-	response, ok := result.(*types.EmbeddingsResponse)
+	embResp, ok := result.(*response.EmbeddingsResponse)
 	if !ok {
-		t.Fatalf("expected *types.EmbeddingsResponse, got %T", result)
+		t.Fatalf("expected *response.EmbeddingsResponse, got %T", result)
 	}
 
-	if len(response.Data) == 0 {
+	if len(embResp.Data) == 0 {
 		t.Fatal("no embeddings in response")
 	}
 
-	if len(response.Data[0].Embedding) != 3 {
-		t.Errorf("got %d dimensions, want 3", len(response.Data[0].Embedding))
+	if len(embResp.Data[0].Embedding) != 3 {
+		t.Errorf("got %d dimensions, want 3", len(embResp.Data[0].Embedding))
 	}
 }
 
-func TestClient_ExecuteProtocol_HTTPError(t *testing.T) {
+func TestClient_Execute_HTTPError(t *testing.T) {
 	// Create mock server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -400,14 +287,20 @@ func TestClient_ExecuteProtocol_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
+	providerCfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: server.URL,
+	}
+	provider, err := providers.NewOllama(providerCfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	mdl := model.New(&config.ModelConfig{
+		Name: "test-model",
+	})
+
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
@@ -415,84 +308,62 @@ func TestClient_ExecuteProtocol_HTTPError(t *testing.T) {
 			MaxRetries: 0, // Disable retry to get immediate error
 		},
 	}
+	c := client.New(cfg)
 
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
+	messages := []protocol.Message{
+		protocol.NewMessage("user", "Hello"),
 	}
+	req := request.NewChat(provider, mdl, messages, map[string]any{})
 
-	request := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
-		},
-		Options: map[string]any{"model": "test-model"},
-	}
-
-	_, err = c.ExecuteProtocol(context.Background(), request)
+	_, err = c.Execute(context.Background(), req)
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
 	}
 }
 
-func TestClient_ExecuteProtocolStream_UnsupportedProtocol(t *testing.T) {
+func TestClient_ExecuteStream_UnsupportedProtocol(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
+	providerCfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: server.URL,
+	}
+	provider, err := providers.NewOllama(providerCfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	mdl := model.New(&config.ModelConfig{
+		Name: "test-model",
+	})
+
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
 	}
-
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	c := client.New(cfg)
 
 	// Embeddings does not support streaming
-	request := &types.EmbeddingsRequest{
-		Input:   "test",
-		Options: map[string]any{"model": "test-model"},
-	}
+	req := request.NewEmbeddings(provider, mdl, "test", map[string]any{})
 
-	_, err = c.ExecuteProtocolStream(context.Background(), request)
+	_, err = c.ExecuteStream(context.Background(), req)
 	if err == nil {
 		t.Error("expected error for unsupported streaming protocol, got nil")
 	}
 }
 
 func TestClient_IsHealthy(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
 	}
 
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	c := client.New(cfg)
 
 	if !c.IsHealthy() {
 		t.Error("expected client to be healthy initially")
@@ -500,28 +371,13 @@ func TestClient_IsHealthy(t *testing.T) {
 }
 
 func TestClient_HTTPClient(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
 	cfg := &config.ClientConfig{
-		Provider: &config.ProviderConfig{
-			Name:    "ollama",
-			BaseURL: server.URL,
-			Model: &config.ModelConfig{
-				Name: "test-model",
-			},
-		},
 		Timeout:            config.Duration(5 * time.Second),
 		ConnectionTimeout:  config.Duration(2 * time.Second),
 		ConnectionPoolSize: 20,
 	}
 
-	c, err := client.New(cfg)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	c := client.New(cfg)
 
 	httpClient := c.HTTPClient()
 

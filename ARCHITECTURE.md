@@ -7,26 +7,34 @@ This document describes the current architecture and implementation patterns of 
 ```
 pkg/
 ├── config/              # Configuration management and loading
-│   ├── agent.go         # Agent configuration structure
-│   ├── client.go        # Client and retry configuration
+│   ├── agent.go         # Agent configuration structure (flat: client, provider, model as peers)
+│   ├── client.go        # Client and retry configuration (HTTP settings only)
 │   ├── duration.go      # Custom Duration type with human-readable strings
 │   ├── model.go         # Model configuration with protocol options
 │   ├── options.go       # Option extraction and validation utilities
 │   └── provider.go      # Provider configuration structures
-├── types/               # Core types, protocols, and message structures
+├── protocol/            # Protocol types and message structures
 │   ├── protocol.go      # Protocol constants and type definitions
-│   ├── message.go       # Message and Request structures
-│   ├── model.go         # Model runtime type with option merging
-│   ├── chat.go          # Chat protocol request/response types
-│   ├── vision.go        # Vision protocol request/response types
-│   ├── tools.go         # Tools protocol request/response types
-│   └── embeddings.go    # Embeddings protocol request/response types
+│   └── message.go       # Message structures
+├── response/            # Response parsing and types
+│   ├── chat.go          # Chat protocol response types
+│   ├── embeddings.go    # Embeddings protocol response types
+│   ├── streaming.go     # Streaming chunk types
+│   └── tools.go         # Tools protocol response types
+├── model/               # Model runtime type
+│   └── model.go         # Model type bridging config to runtime
 ├── providers/           # Provider implementations for different LLM services
 │   ├── provider.go      # Provider interface definition
 │   ├── base.go          # BaseProvider with common functionality
 │   ├── registry.go      # Provider registry and initialization
 │   ├── azure.go         # Azure AI Foundry provider implementation
 │   └── ollama.go        # Ollama provider implementation
+├── request/             # Request interface and protocol-specific request types
+│   ├── interface.go     # Request interface definition
+│   ├── chat.go          # ChatRequest implementation
+│   ├── vision.go        # VisionRequest implementation
+│   ├── tools.go         # ToolsRequest implementation
+│   └── embeddings.go    # EmbeddingsRequest implementation
 ├── client/              # Client layer orchestrating requests across providers
 │   ├── client.go        # Client interface and implementation
 │   └── retry.go         # Exponential backoff retry logic with jitter
@@ -75,30 +83,36 @@ type Message struct {
 }
 ```
 
-**Protocol-Specific Request Types**: Each protocol has its own request type implementing the ProtocolRequest interface:
+**Protocol-Specific Request Types**: Each protocol has its own request type in `pkg/request` implementing the Request interface:
 ```go
-type ProtocolRequest interface {
-    GetProtocol() Protocol
-    GetHeaders() map[string]string
+// Request interface in pkg/request
+type Request interface {
+    Protocol() protocol.Protocol
+    Headers() map[string]string
     Marshal() ([]byte, error)
+    Provider() providers.Provider
+    Model() *model.Model
 }
 
-// Chat protocol request
+// ChatRequest encapsulates chat protocol requests
 type ChatRequest struct {
-    Messages []Message
-    Options  map[string]any
+    messages []protocol.Message
+    options  map[string]any
+    provider providers.Provider
+    model    *model.Model
 }
 
-// Vision protocol request - separates images and vision-specific options from model options
+// VisionRequest encapsulates vision protocol requests
 type VisionRequest struct {
-    Messages      []Message
-    Images        []string            // URLs or data URIs
-    VisionOptions map[string]any      // Vision-specific options (e.g., detail: "high")
-    Options       map[string]any      // Model configuration options
+    messages      []protocol.Message
+    images        []string
+    visionOptions map[string]any
+    options       map[string]any
+    provider      providers.Provider
+    model         *model.Model
 }
 
-// Tools protocol request - separates tool definitions from model options
-// Tools are marshaled in OpenAI format: {"type": "function", "function": {...}}
+// ToolsRequest encapsulates tools protocol requests
 type ToolsRequest struct {
     Messages []Message
     Tools    []ToolDefinition        // Provider-agnostic tool definitions
@@ -472,25 +486,6 @@ Each agent has a unique identifier assigned at creation time that remains stable
   "name": "agent-name",
   "system_prompt": "System instructions for the agent",
   "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "llama3.2:3b",
-        "capabilities": {
-          "chat": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.95
-          },
-          "tools": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "tool_choice": "auto"
-          }
-        }
-      }
-    },
     "timeout": "24s",
     "retry": {
       "max_retries": 3,
@@ -501,14 +496,33 @@ Each agent has a unique identifier assigned at creation time that remains stable
     },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
+  },
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "llama3.2:3b",
+    "capabilities": {
+      "chat": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 0.95
+      },
+      "tools": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "tool_choice": "auto"
+      }
+    }
   }
 }
 ```
 
-**Configuration Hierarchy**:
-- `AgentConfig`: Top-level agent configuration
-- `ClientConfig`: Client configuration with retry settings
-- `ProviderConfig`: Provider details and model configuration
+**Configuration Structure** (Flattened):
+- `AgentConfig`: Top-level with `client`, `provider`, and `model` as peers
+- `ClientConfig`: HTTP client settings and retry configuration
+- `ProviderConfig`: Provider name, base URL, and provider-specific options
 - `ModelConfig`: Model name and protocol-specific capabilities
 - `RetryConfig`: Retry behavior configuration
 
@@ -850,15 +864,23 @@ tests/
 │   ├── provider_test.go
 │   ├── client_test.go
 │   └── agent_test.go
-├── types/
+├── protocol/
 │   └── protocol_test.go
+├── response/
+│   └── response_test.go
+├── providers/
+│   ├── base_test.go
+│   ├── ollama_test.go
+│   ├── azure_test.go
+│   └── registry_test.go
 ├── client/
 │   └── client_test.go
+├── agent/
+│   └── agent_test.go
 ├── mock/
 │   ├── agent_test.go
 │   ├── client_test.go
-│   ├── provider_test.go
-│   └── helpers_test.go
+│   └── provider_test.go
 └── ...
 ```
 
@@ -892,11 +914,11 @@ import (
 func TestProtocol_IsValid(t *testing.T) {
     tests := []struct {
         name     string
-        protocol types.Protocol
+        protocol protocol.Protocol
         expected bool
     }{
-        {name: "chat", protocol: types.Chat, expected: true},
-        {name: "invalid", protocol: types.Protocol("invalid"), expected: false},
+        {name: "chat", protocol: protocol.Chat, expected: true},
+        {name: "invalid", protocol: protocol.Protocol("invalid"), expected: false},
     }
 
     for _, tt := range tests {
@@ -912,23 +934,21 @@ func TestProtocol_IsValid(t *testing.T) {
 **HTTP Mocking**: Use `httptest.Server` for mocking provider responses:
 
 ```go
-func TestClient_ExecuteProtocol_Chat(t *testing.T) {
+func TestClient_Execute_Chat(t *testing.T) {
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        response := types.ChatResponse{
+        resp := response.ChatResponse{
             Model: "test-model",
-            Choices: []struct {
-                Index        int
-                Message      types.Message
-                FinishReason string
-            }{
-                {
-                    Index:   0,
-                    Message: types.NewMessage("assistant", "Test response"),
-                },
-            },
         }
+        resp.Choices = append(resp.Choices, struct {
+            Index        int
+            Message      protocol.Message
+            FinishReason string
+        }{
+            Index:   0,
+            Message: protocol.NewMessage("assistant", "Test response"),
+        })
         w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(response)
+        json.NewEncoder(w).Encode(resp)
     }))
     defer server.Close()
 
@@ -1045,7 +1065,7 @@ agent := mock.NewSimpleChatAgent("id", "response text")
 agent := mock.NewStreamingChatAgent("id", []string{"chunk1", "chunk2"})
 
 // Tools agent
-agent := mock.NewToolsAgent("id", []types.ToolCall{...})
+agent := mock.NewToolsAgent("id", []response.ToolCall{...})
 
 // Embeddings agent
 agent := mock.NewEmbeddingsAgent("id", []float64{0.1, 0.2, 0.3})
@@ -1065,8 +1085,8 @@ The option pattern allows precise control over mock behavior:
 // Configure specific behaviors
 mockAgent := mock.NewMockAgent(
     mock.WithID("custom-id"),
-    mock.WithChatResponse(&types.ChatResponse{...}, nil),
-    mock.WithStreamChunks([]types.StreamingChunk{...}, nil),
+    mock.WithChatResponse(&response.ChatResponse{...}, nil),
+    mock.WithStreamChunks([]*response.StreamingChunk{...}, nil),
 )
 
 // Test error handling

@@ -1,6 +1,12 @@
-package types
+// Package model provides the Model type representing a configured LLM model at runtime.
+// It stores the model name and protocol-specific default options,
+// bridging JSON configuration with runtime domain types.
+package model
 
-import "github.com/JaimeStill/go-agents/pkg/config"
+import (
+	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
+)
 
 // Model represents a configured LLM model at runtime.
 // It stores the model name and protocol-specific default options.
@@ -12,30 +18,22 @@ type Model struct {
 	// Options holds protocol-specific default options.
 	// Keys are protocols (Chat, Vision, Tools, Embeddings).
 	// Values are option maps for that protocol (temperature, max_tokens, etc.)
-	Options map[Protocol]map[string]any
+	Options map[protocol.Protocol]map[string]any
 }
 
-// NewModel creates a new Model with the given name and empty options.
-func NewModel(name string) *Model {
-	return &Model{
-		Name:    name,
-		Options: make(map[Protocol]map[string]any),
-	}
-}
-
-// FromConfig creates a Model from a ModelConfig.
+// New creates a Model from a ModelConfig.
 // Handles conversion from string-keyed configuration to Protocol-keyed runtime model.
 // This bridges the gap between JSON configuration structure and runtime domain type.
-func FromConfig(cfg *config.ModelConfig) *Model {
+func New(cfg *config.ModelConfig) *Model {
 	model := &Model{
 		Name:    cfg.Name,
-		Options: make(map[Protocol]map[string]any),
+		Options: make(map[protocol.Protocol]map[string]any),
 	}
 
 	// Convert string keys to Protocol constants
 	for protocolName, options := range cfg.Capabilities {
-		protocol := Protocol(protocolName) // e.g., "chat" → types.Chat
-		model.Options[protocol] = options
+		p := protocol.Protocol(protocolName)
+		model.Options[p] = options
 	}
 
 	return model

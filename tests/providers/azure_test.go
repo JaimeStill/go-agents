@@ -5,20 +5,14 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/types"
 )
 
 func TestNewAzure(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -46,12 +40,6 @@ func TestNewAzure_MissingDeployment(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"auth_type":   "api_key",
 			"token":       "test-key",
@@ -70,12 +58,6 @@ func TestNewAzure_MissingAuthType(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"token":       "test-key",
@@ -94,12 +76,6 @@ func TestNewAzure_MissingToken(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -118,12 +94,6 @@ func TestNewAzure_MissingAPIVersion(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment": "gpt-4-deployment",
 			"auth_type":  "api_key",
@@ -138,19 +108,10 @@ func TestNewAzure_MissingAPIVersion(t *testing.T) {
 	}
 }
 
-func TestAzure_GetEndpoint(t *testing.T) {
+func TestAzure_Endpoint(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat":       {},
-				"vision":     {},
-				"tools":      {},
-				"embeddings": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -165,33 +126,33 @@ func TestAzure_GetEndpoint(t *testing.T) {
 	}
 
 	tests := []struct {
-		protocol types.Protocol
+		protocol protocol.Protocol
 		expected string
 	}{
 		{
-			types.Chat,
+			protocol.Chat,
 			"https://my-resource.openai.azure.com/deployments/gpt-4-deployment/chat/completions?api-version=2024-02-01",
 		},
 		{
-			types.Vision,
+			protocol.Vision,
 			"https://my-resource.openai.azure.com/deployments/gpt-4-deployment/chat/completions?api-version=2024-02-01",
 		},
 		{
-			types.Tools,
+			protocol.Tools,
 			"https://my-resource.openai.azure.com/deployments/gpt-4-deployment/chat/completions?api-version=2024-02-01",
 		},
 		{
-			types.Embeddings,
+			protocol.Embeddings,
 			"https://my-resource.openai.azure.com/deployments/gpt-4-deployment/embeddings?api-version=2024-02-01",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(string(tt.protocol), func(t *testing.T) {
-			endpoint, err := provider.GetEndpoint(tt.protocol)
+			endpoint, err := provider.Endpoint(tt.protocol)
 
 			if err != nil {
-				t.Fatalf("GetEndpoint failed: %v", err)
+				t.Fatalf("Endpoint failed: %v", err)
 			}
 
 			if endpoint != tt.expected {
@@ -205,12 +166,6 @@ func TestAzure_PrepareRequest(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -224,14 +179,24 @@ func TestAzure_PrepareRequest(t *testing.T) {
 		t.Fatalf("NewAzure failed: %v", err)
 	}
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
+	chatData := &providers.ChatData{
+		Model: "gpt-4",
+		Messages: []protocol.Message{
+			protocol.NewMessage("user", "Hello"),
 		},
-		Options: map[string]any{"model": "gpt-4"},
+		Options: map[string]any{},
 	}
 
-	request, err := provider.PrepareRequest(context.Background(), chatRequest)
+	body, err := provider.Marshal(protocol.Chat, chatData)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	request, err := provider.PrepareRequest(context.Background(), protocol.Chat, body, headers)
 
 	if err != nil {
 		t.Fatalf("PrepareRequest failed: %v", err)
@@ -259,12 +224,6 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -278,14 +237,24 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 		t.Fatalf("NewAzure failed: %v", err)
 	}
 
-	chatRequest := &types.ChatRequest{
-		Messages: []types.Message{
-			types.NewMessage("user", "Hello"),
+	chatData := &providers.ChatData{
+		Model: "gpt-4",
+		Messages: []protocol.Message{
+			protocol.NewMessage("user", "Hello"),
 		},
-		Options: map[string]any{"model": "gpt-4", "stream": true},
+		Options: map[string]any{"stream": true},
 	}
 
-	request, err := provider.PrepareStreamRequest(context.Background(), chatRequest)
+	body, err := provider.Marshal(protocol.Chat, chatData)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	request, err := provider.PrepareStreamRequest(context.Background(), protocol.Chat, body, headers)
 
 	if err != nil {
 		t.Fatalf("PrepareStreamRequest failed: %v", err)

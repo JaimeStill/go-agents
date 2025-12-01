@@ -2,7 +2,7 @@
 
 A platform and model agnostic Go agent primitive library.
 
-## Status: Pre-Release (v0.2.1)
+## Status: Pre-Release (v0.3.0)
 
 **go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
 
@@ -29,13 +29,13 @@ The package provides a complete multi-protocol LLM integration system with a pro
 
 ## Development Status
 
-### Current Phase: v0.2.0 - Protocol-Centric Architecture
+### Current Phase: v0.3.0 - Flattened Configuration Architecture
 
-**Completed**: Major architectural refactor to protocol-specific request types. Separates protocol input data (images, tools, input text) from model configuration options (temperature, max_tokens). All protocols validated with Ollama and Azure.
+**Completed**: Configuration hierarchy flattened with `provider` and `model` as peers with `client` at the AgentConfig level. Broke `pkg/types/` into focused packages: `pkg/protocol/` for protocol types and message structures, `pkg/response/` for response parsing. All protocols validated with Ollama and Azure.
 
-**Active Focus**: The system is stable and ready for use. Architecture simplified with clear boundaries between protocol data and configuration.
+**Active Focus**: The system is stable and ready for use. Architecture simplified with clear separation between protocol, response, and configuration concerns.
 
-**Architecture Highlights**: Protocol-specific request types implementing ProtocolRequest interface, OpenAI format as default standard, configuration option merging with runtime overrides, vision and tools protocols properly handling structured data.
+**Architecture Highlights**: Flattened configuration structure, dedicated protocol and response packages, provider-owned request marshaling, clean separation between HTTP client settings and LLM configuration.
 
 ## Getting Started
 
@@ -89,30 +89,35 @@ go run tools/prompt-agent/main.go \
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "llama3.2:3b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "tools": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "llama3.2:3b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "tools": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tool_choice": "auto"
+        }
+      }
     }
   }
   ```
@@ -166,28 +171,33 @@ go run tools/prompt-agent/main.go \
     "name": "azure-key-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "azure",
-        "base_url": "https://go-agents-platform.openai.azure.com/openai",
-        "model": {
-          "name": "o3-mini",
-          "capabilities": {
-            "chat": {
-              "max_completion_tokens": 4096
-            }
-          }
-        },
-        "options": {
-          "deployment": "o3-mini",
-          "api_version": "2025-01-01-preview",
-          "auth_type": "api_key"
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "model": {
+      "name": "o3-mini",
+      "capabilities": {
+        "chat": {
+          "max_completion_tokens": 4096
+        }
+      }
     }
   }
   ```
@@ -224,31 +234,36 @@ go run tools/prompt-agent/main.go \
 
   ```json
   {
-    "name": "azure-key-agent",
+    "name": "azure-entra-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "azure",
-        "base_url": "https://go-agents-platform.openai.azure.com/openai",
-        "model": {
-          "name": "o3-mini",
-          "capabilities": {
-            "chat": {
-              "max_completion_tokens": 4096
-            }
-          }
-        },
-        "options": {
-          "deployment": "o3-mini",
-          "api_version": "2025-01-01-preview",
-          "auth_type": "bearer"
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "options": {
+        "deployment": "o3-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "bearer"
+      }
+    },
+    "model": {
+      "name": "o3-mini",
+      "capabilities": {
+        "chat": {
+          "max_completion_tokens": 4096
+        }
+      }
     }
   }
   ```
@@ -283,32 +298,37 @@ go run tools/prompt-agent/main.go \
   {
     "name": "vision-agent",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "gemma3:4b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "vision": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "vision_options": {
-                "detail": "auto"
-              }
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "gemma3:4b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "vision": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "vision_options": {
+            "detail": "auto"
+          }
+        }
+      }
     }
   }
   ```
@@ -362,32 +382,37 @@ go run tools/prompt-agent/main.go \
   {
     "name": "vision-agent",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "gemma3:4b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "vision": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "vision_options": {
-                "detail": "auto"
-              }
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "gemma3:4b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "vision": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "vision_options": {
+            "detail": "auto"
+          }
+        }
+      }
     }
   }
   ```
@@ -434,30 +459,35 @@ go run tools/prompt-agent/main.go \
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "llama3.2:3b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "tools": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "llama3.2:3b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "tools": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tool_choice": "auto"
+        }
+      }
     }
   }
   ```
@@ -491,30 +521,35 @@ go run tools/prompt-agent/main.go \
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "llama3.2:3b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "tools": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "llama3.2:3b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "tools": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tool_choice": "auto"
+        }
+      }
     }
   }
   ```
@@ -548,30 +583,35 @@ go run tools/prompt-agent/main.go \
     "name": "ollama-agent",
     "system_prompt": "You are an expert software architect specializing in cloud native systems design",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "llama3.2:3b",
-          "capabilities": {
-            "chat": {
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "top_p": 0.95
-            },
-            "tools": {
-              "max_tokens": 4096,
-              "temperature": 0.7,
-              "tool_choice": "auto"
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "9s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "llama3.2:3b",
+      "capabilities": {
+        "chat": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "top_p": 0.95
+        },
+        "tools": {
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "tool_choice": "auto"
+        }
+      }
     }
   }
   ```
@@ -604,23 +644,28 @@ go run tools/prompt-agent/main.go \
   {
     "name": "embeddings-agent",
     "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "embeddinggemma:300m",
-          "capabilities": {
-            "embeddings": {
-              "dimensions": 768
-            }
-          }
-        }
-      },
       "timeout": "24s",
-      "max_retries": 3,
-      "retry_backoff_base": "1s",
+      "retry": {
+        "max_retries": 3,
+        "initial_backoff": "1s",
+        "max_backoff": "30s",
+        "backoff_multiplier": 2.0,
+        "jitter": true
+      },
       "connection_pool_size": 10,
       "connection_timeout": "6s"
+    },
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "embeddinggemma:300m",
+      "capabilities": {
+        "embeddings": {
+          "dimensions": 768
+        }
+      }
     }
   }
   ```
@@ -645,7 +690,7 @@ Token Usage: 9 total
 
 ### Configuration
 
-Agent configurations use hierarchical JSON with client-based structure. The library supports configuration option merging where model-configured options provide baseline values that can be overridden at runtime.
+Agent configurations use flat JSON structure with `client`, `provider`, and `model` as peer fields. The library supports configuration option merging where model-configured options provide baseline values that can be overridden at runtime.
 
 **Important**: Configuration options do not define defaults - they specify what options to send to the model. Each model has its own inherent defaults determined by the model implementation (e.g., GPT-4's default temperature is 1.0, Llama models may differ). The go-agents library passes configured options through to the model without implementing model-specific defaults.
 
@@ -653,14 +698,14 @@ Agent configurations use hierarchical JSON with client-based structure. The libr
 
 **Required Fields:**
 - `name` - Human-readable agent identifier
-- `client.provider.name` - Provider platform name ("ollama", "azure")
-- `client.provider.base_url` - Provider API endpoint base URL
-- `client.provider.model.name` - Model name on the provider platform (e.g., "llama3.2:3b" on Ollama, "gpt-4o" on Azure)
-- `client.provider.model.capabilities` - At least one protocol must be specified (can be empty object `{}` to use model defaults)
+- `provider.name` - Provider platform name ("ollama", "azure")
+- `provider.base_url` - Provider API endpoint base URL
+- `model.name` - Model name on the provider platform (e.g., "llama3.2:3b" on Ollama, "gpt-4o" on Azure)
+- `model.capabilities` - At least one protocol must be specified (can be empty object `{}` to use model defaults)
 
 **Optional Fields:**
 - `system_prompt` - System instructions injected into message arrays
-- `client.provider.options` - Provider-specific configuration (e.g., Azure deployment name, API version, auth type)
+- `provider.options` - Provider-specific configuration (e.g., Azure deployment name, API version, auth type)
 - `client.timeout` - Overall request timeout including retries (default: "30s")
 - `client.retry` - Retry configuration object:
   - `max_retries` - Maximum retry attempts (default: 3)
@@ -754,32 +799,6 @@ agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
   "name": "multi-protocol-agent",
   "system_prompt": "You are a helpful AI assistant",
   "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "llama3.2:3b",
-        "capabilities": {
-          "chat": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "top_p": 0.95
-          },
-          "vision": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "vision_options": {
-              "detail": "auto"
-            }
-          },
-          "tools": {
-            "max_tokens": 4096,
-            "temperature": 0.7,
-            "tool_choice": "auto"
-          }
-        }
-      }
-    },
     "timeout": "24s",
     "retry": {
       "max_retries": 3,
@@ -790,6 +809,32 @@ agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
     },
     "connection_pool_size": 10,
     "connection_timeout": "9s"
+  },
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "llama3.2:3b",
+    "capabilities": {
+      "chat": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 0.95
+      },
+      "vision": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "vision_options": {
+          "detail": "auto"
+        }
+      },
+      "tools": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "tool_choice": "auto"
+      }
+    }
   }
 }
 ```
@@ -798,16 +843,14 @@ agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
 ```json
 {
   "name": "minimal-chat-agent",
-  "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "llama3.2:3b",
-        "capabilities": {
-          "chat": {}
-        }
-      }
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "llama3.2:3b",
+    "capabilities": {
+      "chat": {}
     }
   }
 }
@@ -818,20 +861,20 @@ agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
 {
   "name": "embeddings-agent",
   "client": {
-    "provider": {
-      "name": "ollama",
-      "base_url": "http://localhost:11434",
-      "model": {
-        "name": "embeddinggemma:300m",
-        "capabilities": {
-          "embeddings": {
-            "dimensions": 768
-          }
-        }
-      }
-    },
     "timeout": "24s",
     "connection_timeout": "6s"
+  },
+  "provider": {
+    "name": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "model": {
+    "name": "embeddinggemma:300m",
+    "capabilities": {
+      "embeddings": {
+        "dimensions": 768
+      }
+    }
   }
 }
 ```
@@ -842,24 +885,24 @@ agent.Chat(ctx, "prompt", map[string]any{"temperature": 0.9})
   "name": "azure-reasoning-agent",
   "system_prompt": "You are a thoughtful AI assistant that provides detailed analysis",
   "client": {
-    "provider": {
-      "name": "azure",
-      "base_url": "https://go-agents-platform.openai.azure.com/openai",
-      "model": {
-        "name": "o3-mini",
-        "capabilities": {
-          "chat": {
-            "max_completion_tokens": 4096
-          }
-        }
-      },
-      "options": {
-        "deployment": "o3-mini",
-        "api_version": "2025-01-01-preview",
-        "auth_type": "api_key"
-      }
-    },
     "timeout": "24s"
+  },
+  "provider": {
+    "name": "azure",
+    "base_url": "https://go-agents-platform.openai.azure.com/openai",
+    "options": {
+      "deployment": "o3-mini",
+      "api_version": "2025-01-01-preview",
+      "auth_type": "api_key"
+    }
+  },
+  "model": {
+    "name": "o3-mini",
+    "capabilities": {
+      "chat": {
+        "max_completion_tokens": 4096
+      }
+    }
   }
 }
 ```
@@ -880,7 +923,8 @@ go test ./tests/... -v
 **Run tests for a specific package:**
 ```bash
 go test ./tests/config/... -v
-go test ./tests/types/... -v
+go test ./tests/protocol/... -v
+go test ./tests/response/... -v
 go test ./tests/providers/... -v
 go test ./tests/client/... -v
 go test ./tests/agent/... -v
@@ -964,14 +1008,17 @@ go doc github.com/JaimeStill/go-agents/pkg/agent
 
 # View specific type documentation
 go doc github.com/JaimeStill/go-agents/pkg/agent.Agent
-go doc github.com/JaimeStill/go-agents/pkg/types.Protocol
+go doc github.com/JaimeStill/go-agents/pkg/protocol.Protocol
 go doc github.com/JaimeStill/go-agents/pkg/client.Client
 ```
 
 **View all available packages:**
 ```bash
 go doc github.com/JaimeStill/go-agents/pkg/config
-go doc github.com/JaimeStill/go-agents/pkg/types
+go doc github.com/JaimeStill/go-agents/pkg/protocol
+go doc github.com/JaimeStill/go-agents/pkg/response
+go doc github.com/JaimeStill/go-agents/pkg/model
+go doc github.com/JaimeStill/go-agents/pkg/request
 go doc github.com/JaimeStill/go-agents/pkg/providers
 go doc github.com/JaimeStill/go-agents/pkg/client
 go doc github.com/JaimeStill/go-agents/pkg/agent

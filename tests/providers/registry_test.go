@@ -11,12 +11,6 @@ func TestCreate_Ollama(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: "http://localhost:11434",
-		Model: &config.ModelConfig{
-			Name: "llama2",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 	}
 
 	provider, err := providers.Create(cfg)
@@ -38,12 +32,6 @@ func TestCreate_Azure(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
 		BaseURL: "https://my-resource.openai.azure.com",
-		Model: &config.ModelConfig{
-			Name: "gpt-4",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 		Options: map[string]any{
 			"deployment":  "gpt-4-deployment",
 			"auth_type":   "api_key",
@@ -71,17 +59,33 @@ func TestCreate_UnknownProvider(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "unknown-provider",
 		BaseURL: "http://localhost",
-		Model: &config.ModelConfig{
-			Name: "test",
-			Capabilities: map[string]map[string]any{
-				"chat": {},
-			},
-		},
 	}
 
 	_, err := providers.Create(cfg)
 
 	if err == nil {
 		t.Error("expected error for unknown provider, got nil")
+	}
+}
+
+func TestListProviders(t *testing.T) {
+	names := providers.ListProviders()
+
+	if len(names) == 0 {
+		t.Error("ListProviders returned empty list")
+	}
+
+	// Check for expected providers
+	found := make(map[string]bool)
+	for _, name := range names {
+		found[name] = true
+	}
+
+	if !found["ollama"] {
+		t.Error("ollama provider not registered")
+	}
+
+	if !found["azure"] {
+		t.Error("azure provider not registered")
 	}
 }
