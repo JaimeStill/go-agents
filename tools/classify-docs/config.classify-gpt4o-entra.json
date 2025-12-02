@@ -1,26 +1,24 @@
 {
   "agent": {
     "name": "classify-agent-gpt4o-entra",
-    "client": {
-      "provider": {
-        "name": "azure",
-        "base_url": "https://go-agents-platform.openai.azure.com/openai",
-        "model": {
-          "name": "gpt-4o",
-          "capabilities": {
-            "vision": {
-              "max_tokens": 4096,
-              "temperature": 0.1,
-              "vision_options": {
-                "detail": "high"
-              }
-            }
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "options": {
+        "deployment": "gpt-4o",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "bearer"
+      }
+    },
+    "model": {
+      "name": "gpt-4o",
+      "capabilities": {
+        "vision": {
+          "max_tokens": 4096,
+          "temperature": 0.1,
+          "vision_options": {
+            "detail": "high"
           }
-        },
-        "options": {
-          "deployment": "gpt-4o",
-          "api_version": "2025-01-01-preview",
-          "auth_type": "bearer"
         }
       }
     }

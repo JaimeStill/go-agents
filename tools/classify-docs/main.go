@@ -58,7 +58,10 @@ func runGeneratePrompt(args []string) {
 	}
 
 	if *token != "" {
-		cfg.Agent.Client.Provider.Options["token"] = *token
+		if cfg.Agent.Provider.Options == nil {
+			cfg.Agent.Provider.Options = make(map[string]any)
+		}
+		cfg.Agent.Provider.Options["token"] = *token
 	}
 
 	if *noCache {
@@ -105,7 +108,10 @@ func runClassify(args []string) {
 	}
 
 	if *token != "" {
-		cfg.Agent.Client.Provider.Options["token"] = *token
+		if cfg.Agent.Provider.Options == nil {
+			cfg.Agent.Provider.Options = make(map[string]any)
+		}
+		cfg.Agent.Provider.Options["token"] = *token
 	}
 
 	cached, err := cache.Load(*systemPromptPath)

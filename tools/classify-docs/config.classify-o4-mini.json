@@ -1,25 +1,23 @@
 {
   "agent": {
     "name": "classify-agent-o4mini",
-    "client": {
-      "provider": {
-        "name": "azure",
-        "base_url": "https://go-agents-platform.openai.azure.com/openai",
-        "model": {
-          "name": "o4-mini",
-          "capabilities": {
-            "vision": {
-              "reasoning_effort": "high",
-              "vision_options": {
-                "detail": "high"
-              }
-            }
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "options": {
+        "deployment": "o4-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "model": {
+      "name": "o4-mini",
+      "capabilities": {
+        "vision": {
+          "reasoning_effort": "high",
+          "vision_options": {
+            "detail": "high"
           }
-        },
-        "options": {
-          "deployment": "o4-mini",
-          "api_version": "2025-01-01-preview",
-          "auth_type": "api_key"
         }
       }
     }

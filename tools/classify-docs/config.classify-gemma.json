@@ -1,19 +1,18 @@
 {
   "agent": {
     "name": "classify-agent-gemma",
-    "client": {
-      "provider": {
-        "name": "ollama",
-        "base_url": "http://localhost:11434",
-        "model": {
-          "name": "gemma3:4b",
-          "capabilities": {
-            "vision": {
-              "temperature": 0.1,
-              "vision_options": {
-                "detail": "high"
-              }
-            }
+    "provider": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434"
+    },
+    "model": {
+      "name": "gemma3:4b",
+      "capabilities": {
+        "vision": {
+          "max_tokens": 4096,
+          "temperature": 0.1,
+          "vision_options": {
+            "detail": "auto"
           }
         }
       }

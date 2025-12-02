@@ -1,22 +1,24 @@
 {
   "agent": {
-    "name": "classify-agent-gpt5-mini",
-    "client": {
-      "provider": {
-        "name": "azure",
-        "base_url": "https://go-agents-platform.openai.azure.com/openai",
-        "model": {
-          "name": "gpt-5-mini",
-          "capabilities": {
-            "vision": {
-              "max_completion_tokens": 4096
-            }
+    "name": "classify-agent-gpt5mini",
+    "provider": {
+      "name": "azure",
+      "base_url": "https://go-agents-platform.openai.azure.com/openai",
+      "options": {
+        "deployment": "gpt-5-mini",
+        "api_version": "2025-01-01-preview",
+        "auth_type": "api_key"
+      }
+    },
+    "model": {
+      "name": "gpt-5-mini",
+      "capabilities": {
+        "vision": {
+          "max_tokens": 4096,
+          "temperature": 0.1,
+          "vision_options": {
+            "detail": "high"
           }
-        },
-        "options": {
-          "deployment": "gpt-5-mini",
-          "api_version": "2025-04-01-preview",
-          "auth_type": "api_key"
         }
       }
     }
