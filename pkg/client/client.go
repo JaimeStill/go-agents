@@ -114,7 +114,9 @@ func (c *client) execute(ctx context.Context, req request.Request) (any, error) 
 	for key, value := range providerRequest.Headers {
 		httpReq.Header.Set(key, value)
 	}
-	provider.SetHeaders(httpReq)
+	if err := provider.SetHeaders(ctx, httpReq); err != nil {
+		return nil, fmt.Errorf("failed to set headers: %w", err)
+	}
 
 	// Execute HTTP request
 	httpClient := c.HTTPClient()
@@ -194,7 +196,9 @@ func (c *client) executeStream(ctx context.Context, req request.Request) (<-chan
 	for key, value := range providerRequest.Headers {
 		httpReq.Header.Set(key, value)
 	}
-	provider.SetHeaders(httpReq)
+	if err := provider.SetHeaders(ctx, httpReq); err != nil {
+		return nil, fmt.Errorf("failed to set headers: %w", err)
+	}
 
 	// Execute HTTP request
 	httpClient := c.HTTPClient()

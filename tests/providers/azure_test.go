@@ -2,6 +2,8 @@ package providers_test
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
@@ -90,6 +92,28 @@ func TestNewAzure_MissingToken(t *testing.T) {
 	}
 }
 
+func TestNewAzure_MissingToken_Bearer(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "azure",
+		BaseURL: "https://my-resource.openai.azure.com",
+		Options: map[string]any{
+			"deployment":  "gpt-4-deployment",
+			"auth_type":   "bearer",
+			"api_version": "2024-02-01",
+		},
+	}
+
+	_, err := providers.NewAzure(cfg)
+
+	if err == nil {
+		t.Error("expected error for missing token with bearer auth, got nil")
+	}
+
+	if !strings.Contains(err.Error(), `auth_type "bearer"`) {
+		t.Errorf("error should mention auth_type, got: %v", err)
+	}
+}
+
 func TestNewAzure_MissingAPIVersion(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "azure",
@@ -105,6 +129,28 @@ func TestNewAzure_MissingAPIVersion(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error for missing api_version, got nil")
+	}
+}
+
+func TestNewAzure_UnsupportedAuthType(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "azure",
+		BaseURL: "https://my-resource.openai.azure.com",
+		Options: map[string]any{
+			"deployment":  "gpt-4-deployment",
+			"auth_type":   "unknown",
+			"api_version": "2024-02-01",
+		},
+	}
+
+	_, err := providers.NewAzure(cfg)
+
+	if err == nil {
+		t.Error("expected error for unsupported auth_type, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "unsupported auth_type") {
+		t.Errorf("error should mention unsupported auth_type, got: %v", err)
 	}
 }
 
@@ -270,5 +316,64 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 
 	if request.Headers["Cache-Control"] != "no-cache" {
 		t.Errorf("got Cache-Control header %q, want %q", request.Headers["Cache-Control"], "no-cache")
+	}
+}
+
+func TestAzure_SetHeaders_ApiKey(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "azure",
+		BaseURL: "https://my-resource.openai.azure.com",
+		Options: map[string]any{
+			"deployment":  "gpt-4-deployment",
+			"auth_type":   "api_key",
+			"token":       "test-api-key",
+			"api_version": "2024-02-01",
+		},
+	}
+
+	provider, err := providers.NewAzure(cfg)
+	if err != nil {
+		t.Fatalf("NewAzure failed: %v", err)
+	}
+
+	req, _ := http.NewRequest("POST", "https://example.com", nil)
+	err = provider.SetHeaders(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("SetHeaders failed: %v", err)
+	}
+
+	if req.Header.Get("api-key") != "test-api-key" {
+		t.Errorf("got api-key header %q, want %q", req.Header.Get("api-key"), "test-api-key")
+	}
+}
+
+func TestAzure_SetHeaders_Bearer(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "azure",
+		BaseURL: "https://my-resource.openai.azure.com",
+		Options: map[string]any{
+			"deployment":  "gpt-4-deployment",
+			"auth_type":   "bearer",
+			"token":       "test-bearer-token",
+			"api_version": "2024-02-01",
+		},
+	}
+
+	provider, err := providers.NewAzure(cfg)
+	if err != nil {
+		t.Fatalf("NewAzure failed: %v", err)
+	}
+
+	req, _ := http.NewRequest("POST", "https://example.com", nil)
+	err = provider.SetHeaders(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("SetHeaders failed: %v", err)
+	}
+
+	expected := "Bearer test-bearer-token"
+	if req.Header.Get("Authorization") != expected {
+		t.Errorf("got Authorization header %q, want %q", req.Header.Get("Authorization"), expected)
 	}
 }

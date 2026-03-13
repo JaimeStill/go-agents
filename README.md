@@ -2,7 +2,7 @@
 
 A platform and model agnostic Go agent primitive library.
 
-## Status: Pre-Release (v0.3.0)
+## Status: Pre-Release (v0.4.0)
 
 **go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
 
@@ -29,19 +29,19 @@ The package provides a complete multi-protocol LLM integration system with a pro
 
 ## Development Status
 
-### Current Phase: v0.3.0 - Flattened Configuration Architecture
+### Current Phase: v0.4.0 - Azure Managed Identity Support
 
-**Completed**: Configuration hierarchy flattened with `provider` and `model` as peers with `client` at the AgentConfig level. Broke `pkg/types/` into focused packages: `pkg/protocol/` for protocol types and message structures, `pkg/response/` for response parsing. All protocols validated with Ollama and Azure.
+**Completed**: Added `pkg/identities` package isolating Azure SDK dependencies. Azure provider now supports `managed_identity` auth type for containerized deployments alongside existing `api_key` and `bearer` authentication. `Provider.SetHeaders` interface updated to accept `context.Context` and return `error` for dynamic token acquisition.
 
 **Active Focus**: The system is stable and ready for use. Architecture simplified with clear separation between protocol, response, and configuration concerns.
 
-**Architecture Highlights**: Flattened configuration structure, dedicated protocol and response packages, provider-owned request marshaling, clean separation between HTTP client settings and LLM configuration.
+**Architecture Highlights**: Flattened configuration structure, dedicated protocol and response packages, provider-owned request marshaling, managed identity support for Azure containerized deployments, clean separation between HTTP client settings and LLM configuration.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Go 1.25 or later
+- Go 1.26 or later
 - For Ollama: at a minimum, Docker. If you have an NVIDIA GPU, you'll want to install the `nvidia-container-toolkit` package and [configure Docker for CDI to work with the NVIDIA Container Toolkit](https://github.com/JaimeStill/LinuxNotes/tree/main/omarchy#configure-docker-for-cdi-to-work-with-nvidia-container-toolkit). If you just have Docker, you can still run and fallback to CPU processing, but your performance will be noticeably bad.
 - For Azure: you will need to have the Azure CLI installed and authenticated to a tenant where you have [created the necessary infrastructure](./scripts/azure/README.md) to connect to a deployed Azure OpenAI model.
 
@@ -277,6 +277,41 @@ OAuth (Open Authorization) is an open standard for delegated authorization. It e
 OIDC (OpenID Connect) builds on OAuth 2.0 by introducing an additional layer for user authentication. While OAuth provides secure authorization for resource access, OIDC adds the means to verify a user's identity. It does this through an ID token—a JSON Web Token (JWT) that carries information about the user and the authentication event. OIDC simplifies user login and enables applications to obtain basic user profile information, ensuring that the user is who they claim to be.
 
 In summary, OAuth is primarily used to grant limited access to user data without exposing login credentials, making it ideal for authorizing actions like posting on social media or accessing personal data. In contrast, OIDC is perfect for scenarios where both authentication (verifying the user's identity) and authorization (granting permission to access resources) are needed. Together, they allow modern applications to securely manage access and provide a streamlined user experience by reducing the need for additional credentials.
+
+#### Test with Azure Managed Identity
+
+For containerized applications running in Azure (App Service, Container Apps, AKS, VMs with managed identity enabled), configure the Azure provider with `managed_identity` auth type. No static token is needed — tokens are acquired dynamically from the Azure Instance Metadata Service.
+
+```json
+{
+  "name": "azure-managed-identity-agent",
+  "system_prompt": "You are an expert software architect specializing in cloud native systems design",
+  "client": {
+    "timeout": "24s"
+  },
+  "provider": {
+    "name": "azure",
+    "base_url": "https://go-agents-platform.openai.azure.com/openai",
+    "options": {
+      "deployment": "o3-mini",
+      "api_version": "2025-01-01-preview",
+      "auth_type": "managed_identity"
+    }
+  },
+  "model": {
+    "name": "o3-mini",
+    "capabilities": {
+      "chat": {
+        "max_completion_tokens": 4096
+      }
+    }
+  }
+}
+```
+
+**Optional managed identity options:**
+- `resource` — Token scope (defaults to `https://cognitiveservices.azure.com/.default`). For Azure Government, use `https://cognitiveservices.azure.us/.default`.
+- `client_id` — Client ID for user-assigned managed identity. Omit for system-assigned identity.
 
 See [scripts/azure/README.md](./scripts/azure/README.md) for full documentation on Azure scripts.
 
@@ -925,6 +960,7 @@ go test ./tests/... -v
 go test ./tests/config/... -v
 go test ./tests/protocol/... -v
 go test ./tests/response/... -v
+go test ./tests/identities/... -v
 go test ./tests/providers/... -v
 go test ./tests/client/... -v
 go test ./tests/agent/... -v
@@ -1017,6 +1053,7 @@ go doc github.com/JaimeStill/go-agents/pkg/client.Client
 go doc github.com/JaimeStill/go-agents/pkg/config
 go doc github.com/JaimeStill/go-agents/pkg/protocol
 go doc github.com/JaimeStill/go-agents/pkg/response
+go doc github.com/JaimeStill/go-agents/pkg/identities
 go doc github.com/JaimeStill/go-agents/pkg/model
 go doc github.com/JaimeStill/go-agents/pkg/request
 go doc github.com/JaimeStill/go-agents/pkg/providers

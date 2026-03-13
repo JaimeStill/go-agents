@@ -28,6 +28,7 @@ type MockProvider struct {
 	streamChunks          []any
 	streamError           error
 	endpointError         error
+	setHeadersError       error
 	customEndpointMapping map[protocol.Protocol]string
 }
 
@@ -125,6 +126,13 @@ func WithEndpointError(err error) MockProviderOption {
 	}
 }
 
+// WithSetHeadersError sets an error for SetHeaders.
+func WithSetHeadersError(err error) MockProviderOption {
+	return func(m *MockProvider) {
+		m.setHeadersError = err
+	}
+}
+
 // Name returns the provider name.
 func (m *MockProvider) Name() string {
 	return m.name
@@ -151,10 +159,16 @@ func (m *MockProvider) Endpoint(proto protocol.Protocol) (string, error) {
 }
 
 // SetHeaders sets the configured headers on the request.
-func (m *MockProvider) SetHeaders(req *http.Request) {
+func (m *MockProvider) SetHeaders(ctx context.Context, req *http.Request) error {
+	if m.setHeadersError != nil {
+		return m.setHeadersError
+	}
+
 	for key, value := range m.headers {
 		req.Header.Set(key, value)
 	}
+
+	return nil
 }
 
 // Marshal returns the predetermined marshaled body.

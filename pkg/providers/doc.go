@@ -26,15 +26,16 @@
 //
 //	type Provider interface {
 //	    Name() string
-//	    Model() models.Model
+//	    BaseURL() string
 //
-//	    GetEndpoint(protocol types.Protocol) (string, error)
-//	    SetHeaders(req *http.Request)
+//	    Endpoint(p protocol.Protocol) (string, error)
+//	    SetHeaders(ctx context.Context, req *http.Request) error
 //
-//	    PrepareRequest(ctx context.Context, protocol types.Protocol, request *types.Request) (*Request, error)
-//	    PrepareStreamRequest(ctx context.Context, protocol types.Protocol, request *types.Request) (*Request, error)
-//	    ProcessResponse(response *http.Response, capability capabilities.Capability) (any, error)
-//	    ProcessStreamResponse(ctx context.Context, response *http.Response, capability capabilities.StreamingCapability) (<-chan any, error)
+//	    Marshal(proto protocol.Protocol, data any) ([]byte, error)
+//	    PrepareRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error)
+//	    PrepareStreamRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error)
+//	    ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error)
+//	    ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error)
 //	}
 //
 // # Built-in Providers
@@ -46,12 +47,6 @@
 //	cfg := &config.ProviderConfig{
 //	    Name:    "ollama",
 //	    BaseURL: "http://localhost:11434",
-//	    Model: &config.ModelConfig{
-//	        Name: "llama2",
-//	        Capabilities: map[string]config.CapabilityConfig{
-//	            "chat": {Format: "openai-chat"},
-//	        },
-//	    },
 //	    Options: map[string]any{
 //	        "auth_type": "bearer",      // Optional: "bearer" or "api_key"
 //	        "token":     "your-token",  // Optional: authentication token
@@ -73,16 +68,10 @@
 //	cfg := &config.ProviderConfig{
 //	    Name:    "azure",
 //	    BaseURL: "https://your-resource.openai.azure.com",
-//	    Model: &config.ModelConfig{
-//	        Name: "gpt-4",
-//	        Capabilities: map[string]config.CapabilityConfig{
-//	            "chat": {Format: "openai-chat"},
-//	        },
-//	    },
 //	    Options: map[string]any{
 //	        "deployment":  "gpt-4-deployment",  // Required: deployment name
-//	        "auth_type":   "api_key",           // Required: "api_key" or "bearer"
-//	        "token":       "your-api-key",      // Required: API key or bearer token
+//	        "auth_type":   "api_key",           // Required: "api_key", "bearer", or "managed_identity"
+//	        "token":       "your-api-key",      // Required for api_key/bearer auth types
 //	        "api_version": "2024-02-01",        // Required: API version
 //	    },
 //	}
@@ -91,9 +80,37 @@
 //
 // Features:
 //   - Deployment-based endpoint routing
-//   - API key or Entra ID (bearer token) authentication
+//   - API key, Entra ID (bearer token), or managed identity authentication
 //   - API version management
 //   - Server-sent events with "data: " prefix for streaming
+//
+// ### Azure Authentication Types
+//
+// API Key:
+//
+//	Options: map[string]any{
+//	    "auth_type": "api_key",
+//	    "token":     "your-api-key",
+//	}
+//
+// Entra ID (Bearer Token):
+//
+//	Options: map[string]any{
+//	    "auth_type": "bearer",
+//	    "token":     "your-bearer-token",
+//	}
+//
+// Managed Identity (for containerized deployments):
+//
+//	Options: map[string]any{
+//	    "auth_type": "managed_identity",
+//	    "resource":  "https://cognitiveservices.azure.com/.default",  // Optional, this is the default
+//	    "client_id": "user-assigned-identity-client-id",             // Optional, for user-assigned identity
+//	}
+//
+// Managed identity acquires tokens dynamically using the Azure SDK's
+// ManagedIdentityCredential. Token caching and refresh are handled
+// internally by the Azure SDK. No static token is required.
 //
 // # Base Provider
 //
@@ -105,51 +122,51 @@
 //	}
 //
 //	func NewCustomProvider(cfg *config.ProviderConfig) (Provider, error) {
-//	    model, err := models.New(cfg.Model)
-//	    if err != nil {
-//	        return nil, err
-//	    }
-//
 //	    return &CustomProvider{
-//	        BaseProvider: providers.NewBaseProvider(cfg.Name, cfg.BaseURL, model),
+//	        BaseProvider: providers.NewBaseProvider(cfg.Name, cfg.BaseURL),
 //	    }, nil
 //	}
 //
 // BaseProvider handles:
 //   - Provider name management
 //   - Base URL storage
-//   - Model instance management
+//   - Default OpenAI-compatible request marshaling
 //
 // # Request and Response Flow
 //
 // Standard request flow:
 //
 //	// 1. Get endpoint for protocol
-//	endpoint, err := provider.GetEndpoint(types.Chat)
+//	endpoint, err := provider.Endpoint(protocol.Chat)
 //
-//	// 2. Prepare request
-//	request, err := provider.PrepareRequest(ctx, types.Chat, protocolRequest)
+//	// 2. Marshal request body
+//	body, err := provider.Marshal(protocol.Chat, chatData)
 //
-//	// 3. Create HTTP request
+//	// 3. Prepare request
+//	request, err := provider.PrepareRequest(ctx, protocol.Chat, body, headers)
+//
+//	// 4. Create HTTP request and set auth headers
 //	httpReq, err := http.NewRequestWithContext(ctx, "POST", request.URL, bytes.NewReader(request.Body))
 //	for key, value := range request.Headers {
 //	    httpReq.Header.Set(key, value)
 //	}
-//	provider.SetHeaders(httpReq)
+//	if err := provider.SetHeaders(ctx, httpReq); err != nil {
+//	    return nil, err
+//	}
 //
-//	// 4. Execute request
+//	// 5. Execute request
 //	resp, err := httpClient.Do(httpReq)
 //
-//	// 5. Process response
-//	result, err := provider.ProcessResponse(resp, capability)
+//	// 6. Process response
+//	result, err := provider.ProcessResponse(ctx, resp, protocol.Chat)
 //
 // Streaming request flow:
 //
 //	// 1-4. Same as standard flow, but use PrepareStreamRequest
-//	request, err := provider.PrepareStreamRequest(ctx, types.Chat, protocolRequest)
+//	request, err := provider.PrepareStreamRequest(ctx, protocol.Chat, body, headers)
 //
 //	// 5. Process streaming response
-//	chunks, err := provider.ProcessStreamResponse(ctx, resp, capability)
+//	chunks, err := provider.ProcessStreamResponse(ctx, resp, protocol.Chat)
 //
 //	// 6. Read streaming chunks
 //	for chunk := range chunks {
@@ -170,7 +187,8 @@
 //
 // # Authentication
 //
-// Providers handle authentication through the SetHeaders method:
+// Providers handle authentication through the SetHeaders method, which accepts
+// a context for providers that need to acquire tokens dynamically (e.g., managed identity):
 //
 //	// Ollama with bearer token
 //	Options: map[string]any{
@@ -197,13 +215,20 @@
 //	    "token":     "your-bearer-token",
 //	}
 //
+//	// Azure with managed identity
+//	Options: map[string]any{
+//	    "auth_type": "managed_identity",
+//	}
+//
 // # Error Handling
 //
 // Providers return errors for:
-//   - Unsupported protocols: GetEndpoint returns error
+//   - Unsupported protocols: Endpoint returns error
 //   - Invalid configuration: NewProvider constructors return error
+//   - Unsupported auth types: NewAzure returns error
+//   - Authentication failures: SetHeaders returns error (e.g., managed identity token acquisition)
 //   - HTTP failures: ProcessResponse/ProcessStreamResponse return error with status
-//   - Response parsing failures: delegated to capability.ParseResponse
+//   - Response parsing failures: delegated to response.Parse
 //
 // # Thread Safety
 //
@@ -232,19 +257,19 @@
 //	        return nil, fmt.Errorf("api_key is required")
 //	    }
 //
-//	    model, err := models.New(cfg.Model)
-//	    if err != nil {
-//	        return nil, err
-//	    }
-//
 //	    return &CustomProvider{
-//	        BaseProvider: providers.NewBaseProvider(cfg.Name, cfg.BaseURL, model),
+//	        BaseProvider: providers.NewBaseProvider(cfg.Name, cfg.BaseURL),
 //	        apiKey:       apiKey,
 //	    }, nil
 //	}
 //
-//	func (p *CustomProvider) GetEndpoint(protocol types.Protocol) (string, error) {
+//	func (p *CustomProvider) Endpoint(proto protocol.Protocol) (string, error) {
 //	    // Implement endpoint logic
+//	}
+//
+//	func (p *CustomProvider) SetHeaders(ctx context.Context, req *http.Request) error {
+//	    req.Header.Set("Authorization", "Bearer "+p.apiKey)
+//	    return nil
 //	}
 //
 //	// Implement remaining Provider interface methods...
