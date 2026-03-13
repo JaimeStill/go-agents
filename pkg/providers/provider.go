@@ -27,7 +27,7 @@ type Provider interface {
 
 	// SetHeaders sets provider-specific authentication and custom headers on an HTTP request.
 	// This is called after the request is created but before it is executed.
-	SetHeaders(req *http.Request)
+	SetHeaders(ctx context.Context, req *http.Request) error
 
 	// Marshal converts request data to provider-specific JSON format.
 	// The data parameter should be *ChatData, *VisionData, *ToolsData, or *EmbeddingsData

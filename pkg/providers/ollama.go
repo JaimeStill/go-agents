@@ -173,10 +173,7 @@ func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.R
 	return output, nil
 }
 
-// SetHeaders sets authentication headers on the HTTP request.
-// Supports "bearer" token (Authorization: Bearer <token>) and "api_key" (custom header).
-// The "auth_header" option allows customizing the API key header name (default: X-API-Key).
-func (p *OllamaProvider) SetHeaders(req *http.Request) {
+func (p *OllamaProvider) SetHeaders(ctx context.Context, req *http.Request) error {
 	if authType, ok := p.options["auth_type"].(string); ok {
 		if token, ok := p.options["token"].(string); ok && token != "" {
 			switch authType {
@@ -191,4 +188,6 @@ func (p *OllamaProvider) SetHeaders(req *http.Request) {
 			}
 		}
 	}
+
+	return nil
 }

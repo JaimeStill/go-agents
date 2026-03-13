@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.4.0] - 2026-03-13
+
+**Breaking Changes**:
+- `Provider.SetHeaders` signature changed from `SetHeaders(req *http.Request)` to `SetHeaders(ctx context.Context, req *http.Request) error`
+
+**Added**:
+- `pkg/identities` package for managed identity token sources
+  - `AzureTokenSource` type wrapping `azidentity.ManagedIdentityCredential`
+  - `NewAzureTokenSource(scope, clientID)` constructor with default scope
+  - `GetToken(ctx)` method for dynamic token acquisition
+- Azure provider `managed_identity` auth type for containerized deployments
+  - System-assigned identity (default) and user-assigned identity via `client_id` option
+  - Configurable token scope via `resource` option (defaults to `https://cognitiveservices.azure.com/.default`)
+- `MockProvider.WithSetHeadersError` option for testing authentication failures
+
+**Changed**:
+- Azure provider `NewAzure` constructor validates `auth_type` and returns error for unsupported values
+- Client layer (`execute`, `executeStream`) now propagates `SetHeaders` errors
+
 ## [v0.3.0] - 2025-12-01
 
 **Breaking Changes**:

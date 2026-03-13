@@ -21,6 +21,8 @@ pkg/
 │   ├── embeddings.go    # Embeddings protocol response types
 │   ├── streaming.go     # Streaming chunk types
 │   └── tools.go         # Tools protocol response types
+├── identities/          # Managed identity token sources
+│   └── azure.go         # Azure managed identity via azidentity SDK
 ├── model/               # Model runtime type
 │   └── model.go         # Model type bridging config to runtime
 ├── providers/           # Provider implementations for different LLM services
@@ -359,19 +361,19 @@ type Provider interface {
     ProcessStreamResponse(ctx context.Context, resp *http.Response, protocol types.Protocol) (<-chan any, error)
 
     // Authentication
-    SetHeaders(req *http.Request)
+    SetHeaders(ctx context.Context, req *http.Request) error
 }
 ```
 
 **Provider Responsibilities**:
 - **Endpoint Mapping**: Map protocols to provider-specific API endpoints
 - **Request Transformation**: Format requests for provider API
-- **Authentication**: Handle provider-specific authentication methods
+- **Authentication**: Handle provider-specific authentication methods (API keys, bearer tokens, managed identity)
 - **Response Parsing**: Parse provider responses using protocol-specific parsers
 
 **Implemented Providers**:
 - **Ollama**: OpenAI-compatible endpoints via `/v1/*`
-- **Azure**: Azure AI Foundry with OpenAI format support
+- **Azure**: Azure AI Foundry with OpenAI format support, including managed identity authentication
 
 **Request Structure**:
 ```go

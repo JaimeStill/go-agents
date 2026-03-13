@@ -10,23 +10,29 @@ import (
 	"strings"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/identities"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
 // AzureProvider implements Provider for Azure OpenAI Service.
-// Supports deployment-based routing and both API key and Entra ID authentication.
+// Supports deployment-based routing with API key, Entra ID (bearer token),
+// and managed identity authentication.
 type AzureProvider struct {
 	*BaseProvider
-	deployment string
-	authType   string
-	token      string
-	apiVersion string
+	deployment  string
+	authType    string
+	token       string
+	apiVersion  string
+	tokenSource *identities.AzureTokenSource
 }
 
 // NewAzure creates a new AzureProvider from configuration.
-// Requires "deployment", "auth_type", "token", and "api_version" in options.
-// Returns an error if any required option is missing.
+// Requires "deployment", "auth_type", and "api_version" in options.
+// For "api_key" and "bearer" auth types, "token" is also required.
+// For "managed_identity", optional "resource" (token scope) and "client_id"
+// (user-assigned identity) are supported.
+// Returns an error if any required option is missing or auth_type is unsupported.
 func NewAzure(c *config.ProviderConfig) (Provider, error) {
 	deployment, ok := c.Options["deployment"].(string)
 	if !ok || deployment == "" {
@@ -38,23 +44,23 @@ func NewAzure(c *config.ProviderConfig) (Provider, error) {
 		return nil, fmt.Errorf("auth_type is required for Azure provider")
 	}
 
-	token, ok := c.Options["token"].(string)
-	if !ok || token == "" {
-		return nil, fmt.Errorf("token is required for Azure provider")
-	}
-
 	apiVersion, ok := c.Options["api_version"].(string)
 	if !ok || apiVersion == "" {
 		return nil, fmt.Errorf("api_version is required for Azure provider")
 	}
 
-	return &AzureProvider{
+	p := &AzureProvider{
 		BaseProvider: NewBaseProvider(c.Name, c.BaseURL),
 		deployment:   deployment,
 		authType:     authType,
-		token:        token,
 		apiVersion:   apiVersion,
-	}, nil
+	}
+
+	if err := p.initAuth(c); err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
 
 // Endpoint returns the full Azure OpenAI endpoint URL for a protocol.
@@ -200,8 +206,9 @@ func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Re
 }
 
 // SetHeaders sets authentication headers on the HTTP request.
-// Supports "api_key" (api-key header) and "bearer" (Authorization: Bearer <token>).
-func (p *AzureProvider) SetHeaders(req *http.Request) {
+// Supports "api_key" (api-key header), "bearer" (Authorization: Bearer),
+// and "managed_identity" (dynamic token acquisition via Azure identity).
+func (p *AzureProvider) SetHeaders(ctx context.Context, req *http.Request) error {
 	switch p.authType {
 	case "api_key":
 		if p.token != "" {
@@ -211,5 +218,38 @@ func (p *AzureProvider) SetHeaders(req *http.Request) {
 		if p.token != "" {
 			req.Header.Set("Authorization", "Bearer "+p.token)
 		}
+	case "managed_identity":
+		token, err := p.tokenSource.GetToken(ctx)
+		if err != nil {
+			return fmt.Errorf("acquire managed identity token: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
+
+	return nil
+}
+
+// initAuth initializes authentication based on the configured auth_type.
+func (p *AzureProvider) initAuth(c *config.ProviderConfig) error {
+	switch p.authType {
+	case "api_key", "bearer":
+		token, ok := c.Options["token"].(string)
+		if !ok || token == "" {
+			return fmt.Errorf("token is required for Azure provider with auth_type %q", p.authType)
+		}
+		p.token = token
+	case "managed_identity":
+		resource, _ := c.Options["resource"].(string)
+		clientID, _ := c.Options["client_id"].(string)
+
+		tokenSource, err := identities.NewAzureTokenSource(resource, clientID)
+		if err != nil {
+			return fmt.Errorf("initialize managed identity: %w", err)
+		}
+		p.tokenSource = tokenSource
+	default:
+		return fmt.Errorf("unsupported auth_type %q for Azure provider", p.authType)
+	}
+
+	return nil
 }
