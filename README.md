@@ -313,6 +313,8 @@ For containerized applications running in Azure (App Service, Container Apps, AK
 - `resource` — Token scope (defaults to `https://cognitiveservices.azure.com/.default`). For Azure Government, use `https://cognitiveservices.azure.us/.default`.
 - `client_id` — Client ID for user-assigned managed identity. Omit for system-assigned identity.
 
+> **Azure Base URL**: For Azure OpenAI-kind Cognitive Services accounts, the `base_url` must include the `/openai` path segment (e.g., `https://my-service.openai.azure.com/openai`). AIServices-kind accounts that expose a unified endpoint do not require this suffix. If you receive HTTP 404 errors from Azure, verify your account kind and adjust the base URL accordingly.
+
 See [scripts/azure/README.md](./scripts/azure/README.md) for full documentation on Azure scripts.
 
 #### Vision Protocol (Local Image)
