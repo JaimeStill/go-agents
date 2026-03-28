@@ -78,8 +78,8 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("got name %s, want ollama", cfg.Name)
 	}
 
-	if cfg.BaseURL != "http://localhost:11434" {
-		t.Errorf("got base_url %s, want http://localhost:11434", cfg.BaseURL)
+	if cfg.BaseURL != "" {
+		t.Errorf("got base_url %q, want empty (provider handles default)", cfg.BaseURL)
 	}
 
 	if cfg.Options == nil {

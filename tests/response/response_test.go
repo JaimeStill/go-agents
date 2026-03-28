@@ -1,295 +1,200 @@
 package response_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/response"
 )
 
-func TestChatResponse_Content_StringContent(t *testing.T) {
-	jsonData := `{
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"message": {
-				"role": "assistant",
-				"content": "Hello, world!"
-			}
-		}]
-	}`
-
-	var resp response.ChatResponse
-	if err := json.Unmarshal([]byte(jsonData), &resp); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+func TestResponse_Text_SingleBlock(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Hello, world!"},
+		},
 	}
 
-	content := resp.Content()
-	if content != "Hello, world!" {
-		t.Errorf("got content %q, want %q", content, "Hello, world!")
+	if resp.Text() != "Hello, world!" {
+		t.Errorf("got text %q, want %q", resp.Text(), "Hello, world!")
 	}
 }
 
-func TestChatResponse_Content_EmptyChoices(t *testing.T) {
-	jsonData := `{
-		"model": "gpt-4",
-		"choices": []
-	}`
-
-	var resp response.ChatResponse
-	if err := json.Unmarshal([]byte(jsonData), &resp); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+func TestResponse_Text_MultipleBlocks(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Hello, "},
+			response.TextBlock{Text: "world!"},
+		},
 	}
 
-	content := resp.Content()
-	if content != "" {
-		t.Errorf("got content %q, want empty string", content)
+	if resp.Text() != "Hello, world!" {
+		t.Errorf("got text %q, want %q", resp.Text(), "Hello, world!")
 	}
 }
 
-func TestChatResponse_Unmarshal(t *testing.T) {
-	jsonData := `{
-		"id": "chatcmpl-123",
-		"object": "chat.completion",
-		"created": 1677652288,
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"message": {
-				"role": "assistant",
-				"content": "Hello there!"
+func TestResponse_Text_EmptyContent(t *testing.T) {
+	resp := &response.Response{
+		Role:    "assistant",
+		Content: []response.ContentBlock{},
+	}
+
+	if resp.Text() != "" {
+		t.Errorf("got text %q, want empty string", resp.Text())
+	}
+}
+
+func TestResponse_Text_SkipsToolBlocks(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Let me check that."},
+			response.ToolUseBlock{ID: "call_1", Name: "get_weather", Input: map[string]any{"location": "Boston"}},
+		},
+	}
+
+	if resp.Text() != "Let me check that." {
+		t.Errorf("got text %q, want %q", resp.Text(), "Let me check that.")
+	}
+}
+
+func TestResponse_ToolCalls(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.ToolUseBlock{
+				ID:    "call_1",
+				Name:  "get_weather",
+				Input: map[string]any{"location": "Boston"},
 			},
-			"finish_reason": "stop"
-		}],
-		"usage": {
-			"prompt_tokens": 9,
-			"completion_tokens": 12,
-			"total_tokens": 21
-		}
-	}`
-
-	var resp response.ChatResponse
-	if err := json.Unmarshal([]byte(jsonData), &resp); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+		},
 	}
 
-	if resp.ID != "chatcmpl-123" {
-		t.Errorf("got ID %q, want %q", resp.ID, "chatcmpl-123")
+	calls := resp.ToolCalls()
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls, want 1", len(calls))
 	}
 
-	if resp.Model != "gpt-4" {
-		t.Errorf("got model %q, want %q", resp.Model, "gpt-4")
+	if calls[0].Name != "get_weather" {
+		t.Errorf("got name %q, want %q", calls[0].Name, "get_weather")
 	}
 
-	if len(resp.Choices) != 1 {
-		t.Fatalf("got %d choices, want 1", len(resp.Choices))
-	}
-
-	if resp.Content() != "Hello there!" {
-		t.Errorf("got content %q, want %q", resp.Content(), "Hello there!")
-	}
-
-	if resp.Usage == nil {
-		t.Fatal("usage is nil")
-	}
-
-	if resp.Usage.TotalTokens != 21 {
-		t.Errorf("got total tokens %d, want 21", resp.Usage.TotalTokens)
+	if calls[0].Input["location"] != "Boston" {
+		t.Errorf("got location %v, want Boston", calls[0].Input["location"])
 	}
 }
 
-func TestStreamingChunk_Content(t *testing.T) {
-	jsonData := `{
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"delta": {
-				"content": "Hello"
-			}
-		}]
-	}`
-
-	var chunk response.StreamingChunk
-	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+func TestResponse_ToolCalls_Empty(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Just text."},
+		},
 	}
 
-	content := chunk.Content()
-	if content != "Hello" {
-		t.Errorf("got content %q, want %q", content, "Hello")
+	calls := resp.ToolCalls()
+	if calls != nil {
+		t.Errorf("got %d tool calls, want nil", len(calls))
 	}
 }
 
-func TestStreamingChunk_Content_EmptyChoices(t *testing.T) {
-	jsonData := `{
-		"model": "gpt-4",
-		"choices": []
-	}`
-
-	var chunk response.StreamingChunk
-	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+func TestResponse_ToolCalls_MultipleWithText(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "I'll check both."},
+			response.ToolUseBlock{ID: "call_1", Name: "get_weather", Input: map[string]any{"location": "Boston"}},
+			response.ToolUseBlock{ID: "call_2", Name: "get_weather", Input: map[string]any{"location": "London"}},
+		},
 	}
 
-	content := chunk.Content()
-	if content != "" {
-		t.Errorf("got content %q, want empty string", content)
-	}
-}
-
-func TestStreamingChunk_Unmarshal(t *testing.T) {
-	jsonData := `{
-		"id": "chatcmpl-123",
-		"object": "chat.completion.chunk",
-		"created": 1677652288,
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"delta": {
-				"content": "Hello"
-			},
-			"finish_reason": null
-		}]
-	}`
-
-	var chunk response.StreamingChunk
-	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+	calls := resp.ToolCalls()
+	if len(calls) != 2 {
+		t.Fatalf("got %d tool calls, want 2", len(calls))
 	}
 
-	if chunk.ID != "chatcmpl-123" {
-		t.Errorf("got ID %q, want %q", chunk.ID, "chatcmpl-123")
+	if calls[0].Input["location"] != "Boston" {
+		t.Errorf("got first location %v, want Boston", calls[0].Input["location"])
 	}
 
-	if chunk.Model != "gpt-4" {
-		t.Errorf("got model %q, want %q", chunk.Model, "gpt-4")
-	}
-
-	if chunk.Content() != "Hello" {
-		t.Errorf("got content %q, want %q", chunk.Content(), "Hello")
+	if calls[1].Input["location"] != "London" {
+		t.Errorf("got second location %v, want London", calls[1].Input["location"])
 	}
 }
 
-func TestEmbeddingsResponse_Unmarshal(t *testing.T) {
-	jsonData := `{
-		"object": "list",
-		"data": [{
-			"object": "embedding",
-			"embedding": [0.1, 0.2, 0.3],
-			"index": 0
-		}],
-		"model": "text-embedding-ada-002",
-		"usage": {
-			"prompt_tokens": 8,
-			"total_tokens": 8
-		}
-	}`
-
-	var resp response.EmbeddingsResponse
-	if err := json.Unmarshal([]byte(jsonData), &resp); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
+func TestResponse_StopReason(t *testing.T) {
+	resp := &response.Response{
+		Role:       "assistant",
+		StopReason: "stop",
 	}
 
-	if resp.Object != "list" {
-		t.Errorf("got object %q, want %q", resp.Object, "list")
+	if resp.StopReason != "stop" {
+		t.Errorf("got stop reason %q, want %q", resp.StopReason, "stop")
+	}
+}
+
+func TestResponse_Usage(t *testing.T) {
+	resp := &response.Response{
+		Role: "assistant",
+		Usage: &response.TokenUsage{
+			InputTokens:  10,
+			OutputTokens: 20,
+			TotalTokens:  30,
+		},
+	}
+
+	if resp.Usage.InputTokens != 10 {
+		t.Errorf("got input tokens %d, want 10", resp.Usage.InputTokens)
+	}
+
+	if resp.Usage.OutputTokens != 20 {
+		t.Errorf("got output tokens %d, want 20", resp.Usage.OutputTokens)
+	}
+
+	if resp.Usage.TotalTokens != 30 {
+		t.Errorf("got total tokens %d, want 30", resp.Usage.TotalTokens)
+	}
+}
+
+func TestStreamingResponse_Text(t *testing.T) {
+	chunk := &response.StreamingResponse{
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Hello"},
+		},
+	}
+
+	if chunk.Text() != "Hello" {
+		t.Errorf("got text %q, want %q", chunk.Text(), "Hello")
+	}
+}
+
+func TestStreamingResponse_Text_Empty(t *testing.T) {
+	chunk := &response.StreamingResponse{}
+
+	if chunk.Text() != "" {
+		t.Errorf("got text %q, want empty string", chunk.Text())
+	}
+}
+
+func TestEmbeddingsResponse(t *testing.T) {
+	resp := &response.EmbeddingsResponse{
+		Embeddings: [][]float64{{0.1, 0.2, 0.3}},
+		Model:      "text-embedding-ada-002",
+		Usage: &response.TokenUsage{
+			InputTokens: 5,
+			TotalTokens: 5,
+		},
+	}
+
+	if len(resp.Embeddings) != 1 {
+		t.Fatalf("got %d embeddings, want 1", len(resp.Embeddings))
+	}
+
+	if len(resp.Embeddings[0]) != 3 {
+		t.Errorf("got %d dimensions, want 3", len(resp.Embeddings[0]))
 	}
 
 	if resp.Model != "text-embedding-ada-002" {
 		t.Errorf("got model %q, want %q", resp.Model, "text-embedding-ada-002")
-	}
-
-	if len(resp.Data) != 1 {
-		t.Fatalf("got %d data items, want 1", len(resp.Data))
-	}
-
-	if len(resp.Data[0].Embedding) != 3 {
-		t.Fatalf("got %d embedding dimensions, want 3", len(resp.Data[0].Embedding))
-	}
-
-	if resp.Data[0].Embedding[0] != 0.1 {
-		t.Errorf("got embedding[0] %f, want 0.1", resp.Data[0].Embedding[0])
-	}
-}
-
-func TestToolsResponse_Unmarshal(t *testing.T) {
-	jsonData := `{
-		"id": "chatcmpl-123",
-		"object": "chat.completion",
-		"created": 1677652288,
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"message": {
-				"role": "assistant",
-				"content": "",
-				"tool_calls": [{
-					"id": "call_123",
-					"type": "function",
-					"function": {
-						"name": "get_weather",
-						"arguments": "{\"location\": \"Boston\"}"
-					}
-				}]
-			},
-			"finish_reason": "tool_calls"
-		}]
-	}`
-
-	var resp response.ToolsResponse
-	if err := json.Unmarshal([]byte(jsonData), &resp); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
-	}
-
-	if resp.ID != "chatcmpl-123" {
-		t.Errorf("got ID %q, want %q", resp.ID, "chatcmpl-123")
-	}
-
-	if len(resp.Choices) != 1 {
-		t.Fatalf("got %d choices, want 1", len(resp.Choices))
-	}
-
-	if len(resp.Choices[0].Message.ToolCalls) != 1 {
-		t.Fatalf("got %d tool calls, want 1", len(resp.Choices[0].Message.ToolCalls))
-	}
-
-	toolCall := resp.Choices[0].Message.ToolCalls[0]
-
-	if toolCall.ID != "call_123" {
-		t.Errorf("got tool call ID %q, want %q", toolCall.ID, "call_123")
-	}
-
-	if toolCall.Function.Name != "get_weather" {
-		t.Errorf("got function name %q, want %q", toolCall.Function.Name, "get_weather")
-	}
-}
-
-func TestParseChat(t *testing.T) {
-	jsonData := []byte(`{
-		"model": "gpt-4",
-		"choices": [{
-			"index": 0,
-			"message": {
-				"role": "assistant",
-				"content": "Hello!"
-			}
-		}]
-	}`)
-
-	resp, err := response.ParseChat(jsonData)
-	if err != nil {
-		t.Fatalf("ParseChat failed: %v", err)
-	}
-
-	if resp.Content() != "Hello!" {
-		t.Errorf("got content %q, want %q", resp.Content(), "Hello!")
-	}
-}
-
-func TestParseChat_InvalidJSON(t *testing.T) {
-	jsonData := []byte(`{invalid json}`)
-
-	_, err := response.ParseChat(jsonData)
-	if err == nil {
-		t.Error("expected error for invalid JSON, got nil")
 	}
 }

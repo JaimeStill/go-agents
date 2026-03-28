@@ -1,0 +1,33 @@
+{
+  "name": "bedrock-haiku",
+  "system_prompt": "You are a helpful assistant.",
+  "provider": {
+    "name": "bedrock",
+    "options": {
+      "region": "us-east-2",
+      "auth_type": "default"
+    }
+  },
+  "format": "converse",
+  "model": {
+    "name": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "capabilities": {
+      "chat": {
+        "inferenceConfig": {
+          "maxTokens": 1024,
+          "temperature": 0.7
+        }
+      },
+      "vision": {
+        "inferenceConfig": {
+          "maxTokens": 1024
+        }
+      },
+      "tools": {
+        "inferenceConfig": {
+          "maxTokens": 1024
+        }
+      }
+    }
+  }
+}

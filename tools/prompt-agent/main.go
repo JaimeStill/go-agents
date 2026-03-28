@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/JaimeStill/go-agents/pkg/agent"
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/format"
 )
 
 func main() {
@@ -92,23 +92,31 @@ func main() {
 	}
 }
 
-func executeChat(ctx context.Context, agent agent.Agent, prompt string) {
+func executeChat(
+	ctx context.Context,
+	agent agent.Agent,
+	prompt string,
+) {
 	response, err := agent.Chat(ctx, prompt)
 	if err != nil {
 		log.Fatalf("Chat failed: %v", err)
 	}
-	fmt.Printf("Response: %s\n", response.Content())
+	fmt.Printf("Response: %s\n", response.Text())
 	if response.Usage != nil {
 		fmt.Printf(
 			"Tokens: %d prompt + %d completions = %d total",
-			response.Usage.PromptTokens,
-			response.Usage.CompletionTokens,
+			response.Usage.InputTokens,
+			response.Usage.OutputTokens,
 			response.Usage.TotalTokens,
 		)
 	}
 }
 
-func executeChatStream(ctx context.Context, agent agent.Agent, prompt string) {
+func executeChatStream(
+	ctx context.Context,
+	agent agent.Agent,
+	prompt string,
+) {
 	stream, err := agent.ChatStream(ctx, prompt)
 	if err != nil {
 		log.Fatalf("ChatStream failed: %v", err)
@@ -118,28 +126,38 @@ func executeChatStream(ctx context.Context, agent agent.Agent, prompt string) {
 		if chunk.Error != nil {
 			log.Fatalf("Stream error: %v", chunk.Error)
 		}
-		fmt.Print(chunk.Content())
+		fmt.Print(chunk.Text())
 	}
 	fmt.Println()
 }
 
-func executeVision(ctx context.Context, agent agent.Agent, prompt string, images []string) {
+func executeVision(
+	ctx context.Context,
+	agent agent.Agent,
+	prompt string,
+	images []format.Image,
+) {
 	response, err := agent.Vision(ctx, prompt, images)
 	if err != nil {
 		log.Fatalf("Vision failed: %v", err)
 	}
-	fmt.Printf("Vision response: %s\n", response.Content())
+	fmt.Printf("Vision response: %s\n", response.Text())
 	if response.Usage != nil {
 		fmt.Printf(
 			"Tokens: %d prompt + %d completion = %d total\n",
-			response.Usage.PromptTokens,
-			response.Usage.CompletionTokens,
+			response.Usage.InputTokens,
+			response.Usage.OutputTokens,
 			response.Usage.TotalTokens,
 		)
 	}
 }
 
-func executeVisionStream(ctx context.Context, agent agent.Agent, prompt string, images []string) {
+func executeVisionStream(
+	ctx context.Context,
+	agent agent.Agent,
+	prompt string,
+	images []format.Image,
+) {
 	stream, err := agent.VisionStream(ctx, prompt, images)
 	if err != nil {
 		log.Fatalf("VisionStream failed: %v", err)
@@ -150,62 +168,67 @@ func executeVisionStream(ctx context.Context, agent agent.Agent, prompt string, 
 			log.Fatalf("Stream error: %v", chunk.Error)
 		}
 
-		fmt.Print(chunk.Content())
+		fmt.Print(chunk.Text())
 	}
 
 	fmt.Println()
 }
 
-func executeTools(ctx context.Context, agent agent.Agent, prompt string, tools []agent.Tool) {
+func executeTools(
+	ctx context.Context,
+	agent agent.Agent,
+	prompt string,
+	tools []agent.Tool,
+) {
 	response, err := agent.Tools(ctx, prompt, tools)
 	if err != nil {
 		log.Fatalf("Tools failed: %v", err)
 	}
 
-	if len(response.Choices) > 0 {
-		message := response.Choices[0].Message
+	if text := response.Text(); text != "" {
+		fmt.Printf("Response: %s\n", text)
+	}
 
-		if message.Content != "" {
-			fmt.Printf("Response: %s\n", message.Content)
-		}
-
-		if len(message.ToolCalls) > 0 {
-			fmt.Printf("\nTool Calls:\n")
-			for _, toolCall := range message.ToolCalls {
-				fmt.Printf("  - %s(%s)\n", toolCall.Function.Name, toolCall.Function.Arguments)
-			}
+	toolCalls := response.ToolCalls()
+	if len(toolCalls) > 0 {
+		fmt.Printf("\nTool Calls:\n")
+		for _, tc := range toolCalls {
+			argsJSON, _ := json.Marshal(tc.Input)
+			fmt.Printf("  - %s(%s)\n", tc.Name, string(argsJSON))
 		}
 	}
 
 	if response.Usage != nil {
 		fmt.Printf("\nTokens: %d prompt + %d completion = %d total\n",
-			response.Usage.PromptTokens,
-			response.Usage.CompletionTokens,
+			response.Usage.InputTokens,
+			response.Usage.OutputTokens,
 			response.Usage.TotalTokens,
 		)
 	}
 }
 
-func executeEmbeddings(ctx context.Context, agent agent.Agent, input string) {
+func executeEmbeddings(
+	ctx context.Context,
+	agent agent.Agent,
+	input string,
+) {
 	response, err := agent.Embed(ctx, input)
 	if err != nil {
 		log.Fatalf("Embeddings failed: %v", err)
 	}
 
 	fmt.Printf("Input: %q\n\n", input)
-	fmt.Printf("Generated %d embedding(s):\n\n", len(response.Data))
+	fmt.Printf("Generated %d embedding(s):\n\n", len(response.Embeddings))
 
-	for i, data := range response.Data {
+	for i, embedding := range response.Embeddings {
 		fmt.Printf("Embedding [%d]:\n", i)
-		fmt.Printf("  Dimensions: %d\n", len(data.Embedding))
+		fmt.Printf("  Dimensions: %d\n", len(embedding))
 
-		if len(data.Embedding) > 0 {
-			// Show first few and last few values
+		if len(embedding) > 0 {
 			previewCount := 5
-			if len(data.Embedding) <= previewCount*2 {
-				// If vector is small, show all values
+			if len(embedding) <= previewCount*2 {
 				fmt.Printf("  Values: [")
-				for j, val := range data.Embedding {
+				for j, val := range embedding {
 					if j > 0 {
 						fmt.Printf(", ")
 					}
@@ -213,31 +236,29 @@ func executeEmbeddings(ctx context.Context, agent agent.Agent, input string) {
 				}
 				fmt.Printf("]\n")
 			} else {
-				// Show first few, ellipsis, last few
 				fmt.Printf("  Values: [")
 				for j := range previewCount {
 					if j > 0 {
 						fmt.Printf(", ")
 					}
-					fmt.Printf("%.6f", data.Embedding[j])
+					fmt.Printf("%.6f", embedding[j])
 				}
 				fmt.Printf(", ..., ")
-				start := len(data.Embedding) - previewCount
-				for j := start; j < len(data.Embedding); j++ {
+				start := len(embedding) - previewCount
+				for j := start; j < len(embedding); j++ {
 					if j > start {
 						fmt.Printf(", ")
 					}
-					fmt.Printf("%.6f", data.Embedding[j])
+					fmt.Printf("%.6f", embedding[j])
 				}
 				fmt.Printf("]\n")
 			}
 
-			// Calculate and show statistics
 			var sum, min, max float64
-			min = data.Embedding[0]
-			max = data.Embedding[0]
+			min = embedding[0]
+			max = embedding[0]
 
-			for _, val := range data.Embedding {
+			for _, val := range embedding {
 				sum += val
 				if val < min {
 					min = val
@@ -247,12 +268,8 @@ func executeEmbeddings(ctx context.Context, agent agent.Agent, input string) {
 				}
 			}
 
-			mean := sum / float64(len(data.Embedding))
+			mean := sum / float64(len(embedding))
 			fmt.Printf("  Statistics: min=%.6f, max=%.6f, mean=%.6f\n", min, max, mean)
-		}
-
-		if data.Index >= 0 {
-			fmt.Printf("  Index: %d\n", data.Index)
 		}
 
 		fmt.Println()
@@ -277,8 +294,8 @@ func loadTools(filename string) []agent.Tool {
 	return tools
 }
 
-func prepareImages(imageList []string) []string {
-	prepared := make([]string, len(imageList))
+func prepareImages(imageList []string) []format.Image {
+	prepared := make([]format.Image, len(imageList))
 	for i, img := range imageList {
 		if strings.HasPrefix(img, "http://") || strings.HasPrefix(img, "https://") {
 			// Download and encode remote images (some providers only support base64)
@@ -295,9 +312,10 @@ func prepareImages(imageList []string) []string {
 				log.Fatalf("URL %s is not an image (detected type: %s)", img, mimeType)
 			}
 
-			// Create data URL with detected MIME type
-			encoded := base64.StdEncoding.EncodeToString(data)
-			prepared[i] = fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+			prepared[i] = format.Image{
+				Data:   data,
+				Format: strings.TrimPrefix(mimeType, "image/"),
+			}
 		} else {
 			// Expand home directory if needed
 			if strings.HasPrefix(img, "~/") {
@@ -322,9 +340,10 @@ func prepareImages(imageList []string) []string {
 				log.Fatalf("File %s is not an image (detected type: %s)", img, mimeType)
 			}
 
-			// Create data URL with detected MIME type
-			encoded := base64.StdEncoding.EncodeToString(data)
-			prepared[i] = fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+			prepared[i] = format.Image{
+				Data:   data,
+				Format: strings.TrimPrefix(mimeType, "image/"),
+			}
 		}
 	}
 	return prepared

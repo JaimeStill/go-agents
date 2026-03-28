@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/format"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 func TestNewOllama(t *testing.T) {
@@ -136,8 +138,12 @@ func TestOllama_PrepareRequest(t *testing.T) {
 		t.Fatalf("NewOllama failed: %v", err)
 	}
 
-	// Marshal chat data using the provider
-	chatData := &providers.ChatData{
+	f, err := format.OpenAIFactory()
+	if err != nil {
+		t.Fatalf("OpenAIFactory failed: %v", err)
+	}
+
+	chatData := &format.ChatData{
 		Model: "llama2",
 		Messages: []protocol.Message{
 			protocol.NewMessage("user", "Hello"),
@@ -145,7 +151,7 @@ func TestOllama_PrepareRequest(t *testing.T) {
 		Options: map[string]any{},
 	}
 
-	body, err := provider.Marshal(protocol.Chat, chatData)
+	body, err := f.Marshal(protocol.Chat, chatData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
@@ -189,7 +195,12 @@ func TestOllama_PrepareStreamRequest(t *testing.T) {
 		t.Fatalf("NewOllama failed: %v", err)
 	}
 
-	chatData := &providers.ChatData{
+	f, err := format.OpenAIFactory()
+	if err != nil {
+		t.Fatalf("OpenAIFactory failed: %v", err)
+	}
+
+	chatData := &format.ChatData{
 		Model: "llama2",
 		Messages: []protocol.Message{
 			protocol.NewMessage("user", "Hello"),
@@ -197,7 +208,7 @@ func TestOllama_PrepareStreamRequest(t *testing.T) {
 		Options: map[string]any{"stream": true},
 	}
 
-	body, err := provider.Marshal(protocol.Chat, chatData)
+	body, err := f.Marshal(protocol.Chat, chatData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
@@ -216,11 +227,32 @@ func TestOllama_PrepareStreamRequest(t *testing.T) {
 		t.Fatal("PrepareStreamRequest returned nil request")
 	}
 
-	if request.Headers["Accept"] != "text/event-stream" {
-		t.Errorf("got Accept header %q, want %q", request.Headers["Accept"], "text/event-stream")
+	if request.Headers["Accept"] != streaming.SSEMedia {
+		t.Errorf("got Accept header %q, want %q", request.Headers["Accept"], streaming.SSEMedia)
 	}
 
 	if request.Headers["Cache-Control"] != "no-cache" {
 		t.Errorf("got Cache-Control header %q, want %q", request.Headers["Cache-Control"], "no-cache")
+	}
+}
+
+func TestOllama_Stream(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "ollama",
+		BaseURL: "http://localhost:11434",
+	}
+
+	provider, err := providers.NewOllama(cfg)
+	if err != nil {
+		t.Fatalf("NewOllama failed: %v", err)
+	}
+
+	stream := provider.Stream()
+	if stream == nil {
+		t.Fatal("Stream() returned nil")
+	}
+
+	if _, ok := stream.(*streaming.SSEReader); !ok {
+		t.Errorf("expected *streaming.SSEReader, got %T", stream)
 	}
 }

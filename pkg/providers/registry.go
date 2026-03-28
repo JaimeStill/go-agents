@@ -63,4 +63,5 @@ func ListProviders() []string {
 func init() {
 	Register("ollama", NewOllama)
 	Register("azure", NewAzure)
+	Register("bedrock", NewBedrock)
 }

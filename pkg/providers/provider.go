@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/JaimeStill/go-agents/pkg/protocol"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 // Provider defines the interface for LLM service provider implementations.
@@ -25,15 +26,11 @@ type Provider interface {
 	// Returns an error if the protocol is not supported by this provider.
 	Endpoint(p protocol.Protocol) (string, error)
 
+	Stream() streaming.StreamReader
+
 	// SetHeaders sets provider-specific authentication and custom headers on an HTTP request.
 	// This is called after the request is created but before it is executed.
 	SetHeaders(ctx context.Context, req *http.Request) error
-
-	// Marshal converts request data to provider-specific JSON format.
-	// The data parameter should be *ChatData, *VisionData, *ToolsData, or *EmbeddingsData
-	// based on the protocol. Providers implement this to support their wire format.
-	// BaseProvider provides a default OpenAI-compatible implementation.
-	Marshal(p protocol.Protocol, data any) ([]byte, error)
 
 	// PrepareRequest creates a Request for standard (non-streaming) protocol execution.
 	// Accepts pre-marshaled request body and headers from the request structure.
@@ -42,16 +39,6 @@ type Provider interface {
 	// PrepareStreamRequest creates a Request for streaming protocol execution.
 	// Accepts pre-marshaled request body and headers, adds streaming-specific headers.
 	PrepareStreamRequest(ctx context.Context, p protocol.Protocol, body []byte, headers map[string]string) (*Request, error)
-
-	// ProcessResponse processes a standard HTTP response and returns the parsed result.
-	// Uses response.Parse for protocol-aware parsing.
-	// Returns an error if the HTTP status is not OK or parsing fails.
-	ProcessResponse(ctx context.Context, resp *http.Response, p protocol.Protocol) (any, error)
-
-	// ProcessStreamResponse processes a streaming HTTP response and returns a channel of chunks.
-	// The channel is closed when the stream completes or an error occurs.
-	// Context cancellation stops processing and closes the channel.
-	ProcessStreamResponse(ctx context.Context, resp *http.Response, p protocol.Protocol) (<-chan any, error)
 }
 
 // Request represents a prepared provider request with all necessary components for HTTP execution.

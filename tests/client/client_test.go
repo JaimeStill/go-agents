@@ -10,6 +10,7 @@ import (
 
 	"github.com/JaimeStill/go-agents/pkg/client"
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/format"
 	"github.com/JaimeStill/go-agents/pkg/model"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
@@ -32,30 +33,25 @@ func TestNew(t *testing.T) {
 }
 
 func TestClient_Execute_Chat(t *testing.T) {
-	// Create mock server that returns a valid chat response
+	// Server returns OpenAI-format JSON — the format layer parses it
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		chatResp := response.ChatResponse{
-			Model: "test-model",
-		}
-		chatResp.Choices = append(chatResp.Choices, struct {
-			Index   int              `json:"index"`
-			Message protocol.Message `json:"message"`
-			Delta   *struct {
-				Role    string `json:"role,omitempty"`
-				Content string `json:"content,omitempty"`
-			} `json:"delta,omitempty"`
-			FinishReason string `json:"finish_reason,omitempty"`
-		}{
-			Index:   0,
-			Message: protocol.NewMessage("assistant", "Hello, world!"),
-		})
-
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chatResp)
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message":       map[string]any{"role": "assistant", "content": "Hello, world!"},
+					"finish_reason": "stop",
+				},
+			},
+			"usage": map[string]any{
+				"prompt_tokens":     10,
+				"completion_tokens": 5,
+				"total_tokens":      15,
+			},
+		})
 	}))
 	defer server.Close()
 
-	// Create provider pointing to mock server
 	providerCfg := &config.ProviderConfig{
 		Name:    "ollama",
 		BaseURL: server.URL,
@@ -65,82 +61,65 @@ func TestClient_Execute_Chat(t *testing.T) {
 		t.Fatalf("NewOllama failed: %v", err)
 	}
 
-	// Create model
 	mdl := model.New(&config.ModelConfig{
 		Name: "test-model",
 	})
 
-	// Create client
 	cfg := &config.ClientConfig{
 		Timeout:            config.Duration(30 * time.Second),
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
 		Retry: config.RetryConfig{
-			MaxRetries: 0, // Disable retry for this test
+			MaxRetries: 0,
 		},
 	}
 	c := client.New(cfg)
 
-	// Create request
 	messages := []protocol.Message{
 		protocol.NewMessage("user", "Hello"),
 	}
-	req := request.NewChat(provider, mdl, messages, map[string]any{})
+	f, _ := format.OpenAIFactory()
+	req := request.NewChat(provider, f, mdl, messages, map[string]any{})
 
-	// Execute
 	result, err := c.Execute(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	chatResp, ok := result.(*response.ChatResponse)
+	resp, ok := result.(*response.Response)
 	if !ok {
-		t.Fatalf("expected *response.ChatResponse, got %T", result)
+		t.Fatalf("expected *response.Response, got %T", result)
 	}
 
-	if chatResp.Content() != "Hello, world!" {
-		t.Errorf("got content %q, want %q", chatResp.Content(), "Hello, world!")
+	if resp.Text() != "Hello, world!" {
+		t.Errorf("got text %q, want %q", resp.Text(), "Hello, world!")
 	}
 }
 
 func TestClient_Execute_Tools(t *testing.T) {
-	// Create mock server that returns a valid tools response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		toolsResp := response.ToolsResponse{
-			Model: "test-model",
-		}
-		toolsResp.Choices = append(toolsResp.Choices, struct {
-			Index   int `json:"index"`
-			Message struct {
-				Role      string              `json:"role"`
-				Content   string              `json:"content"`
-				ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason,omitempty"`
-		}{
-			Index: 0,
-			Message: struct {
-				Role      string              `json:"role"`
-				Content   string              `json:"content"`
-				ToolCalls []response.ToolCall `json:"tool_calls,omitempty"`
-			}{
-				Role:    "assistant",
-				Content: "",
-				ToolCalls: []response.ToolCall{
-					{
-						ID:   "call_123",
-						Type: "function",
-						Function: response.ToolCallFunction{
-							Name:      "get_weather",
-							Arguments: `{"location":"Boston"}`,
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "",
+						"tool_calls": []map[string]any{
+							{
+								"id":   "call_123",
+								"type": "function",
+								"function": map[string]any{
+									"name":      "get_weather",
+									"arguments": `{"location":"Boston"}`,
+								},
+							},
 						},
 					},
+					"finish_reason": "tool_calls",
 				},
 			},
 		})
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(toolsResp)
 	}))
 	defer server.Close()
 
@@ -171,7 +150,7 @@ func TestClient_Execute_Tools(t *testing.T) {
 		protocol.NewMessage("user", "What's the weather in Boston?"),
 	}
 
-	tools := []providers.ToolDefinition{
+	tools := []format.ToolDefinition{
 		{
 			Name:        "get_weather",
 			Description: "Get current weather for a location",
@@ -187,51 +166,42 @@ func TestClient_Execute_Tools(t *testing.T) {
 		},
 	}
 
-	req := request.NewTools(provider, mdl, messages, tools, map[string]any{})
+	f, _ := format.OpenAIFactory()
+	req := request.NewTools(provider, f, mdl, messages, tools, map[string]any{})
 
 	result, err := c.Execute(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	toolsResp, ok := result.(*response.ToolsResponse)
+	resp, ok := result.(*response.Response)
 	if !ok {
-		t.Fatalf("expected *response.ToolsResponse, got %T", result)
+		t.Fatalf("expected *response.Response, got %T", result)
 	}
 
-	if len(toolsResp.Choices) == 0 {
-		t.Fatal("no choices in response")
-	}
-
-	if len(toolsResp.Choices[0].Message.ToolCalls) == 0 {
+	calls := resp.ToolCalls()
+	if len(calls) == 0 {
 		t.Fatal("no tool calls in response")
 	}
 
-	toolCall := toolsResp.Choices[0].Message.ToolCalls[0]
-	if toolCall.Function.Name != "get_weather" {
-		t.Errorf("got function name %q, want %q", toolCall.Function.Name, "get_weather")
+	if calls[0].Name != "get_weather" {
+		t.Errorf("got function name %q, want %q", calls[0].Name, "get_weather")
 	}
 }
 
 func TestClient_Execute_Embeddings(t *testing.T) {
-	// Create mock server that returns a valid embeddings response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		embResp := response.EmbeddingsResponse{
-			Object: "list",
-			Model:  "test-model",
-		}
-		embResp.Data = append(embResp.Data, struct {
-			Embedding []float64 `json:"embedding"`
-			Index     int       `json:"index"`
-			Object    string    `json:"object"`
-		}{
-			Embedding: []float64{0.1, 0.2, 0.3},
-			Index:     0,
-			Object:    "embedding",
-		})
-
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(embResp)
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"embedding": []float64{0.1, 0.2, 0.3}},
+			},
+			"model": "test-model",
+			"usage": map[string]any{
+				"prompt_tokens": 5,
+				"total_tokens":  5,
+			},
+		})
 	}))
 	defer server.Close()
 
@@ -258,7 +228,8 @@ func TestClient_Execute_Embeddings(t *testing.T) {
 	}
 	c := client.New(cfg)
 
-	req := request.NewEmbeddings(provider, mdl, "Hello, world!", map[string]any{})
+	f, _ := format.OpenAIFactory()
+	req := request.NewEmbeddings(provider, f, mdl, "Hello, world!", map[string]any{})
 
 	result, err := c.Execute(context.Background(), req)
 	if err != nil {
@@ -270,17 +241,16 @@ func TestClient_Execute_Embeddings(t *testing.T) {
 		t.Fatalf("expected *response.EmbeddingsResponse, got %T", result)
 	}
 
-	if len(embResp.Data) == 0 {
+	if len(embResp.Embeddings) == 0 {
 		t.Fatal("no embeddings in response")
 	}
 
-	if len(embResp.Data[0].Embedding) != 3 {
-		t.Errorf("got %d dimensions, want 3", len(embResp.Data[0].Embedding))
+	if len(embResp.Embeddings[0]) != 3 {
+		t.Errorf("got %d dimensions, want 3", len(embResp.Embeddings[0]))
 	}
 }
 
 func TestClient_Execute_HTTPError(t *testing.T) {
-	// Create mock server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Internal Server Error"))
@@ -305,7 +275,7 @@ func TestClient_Execute_HTTPError(t *testing.T) {
 		ConnectionTimeout:  config.Duration(10 * time.Second),
 		ConnectionPoolSize: 10,
 		Retry: config.RetryConfig{
-			MaxRetries: 0, // Disable retry to get immediate error
+			MaxRetries: 0,
 		},
 	}
 	c := client.New(cfg)
@@ -313,7 +283,8 @@ func TestClient_Execute_HTTPError(t *testing.T) {
 	messages := []protocol.Message{
 		protocol.NewMessage("user", "Hello"),
 	}
-	req := request.NewChat(provider, mdl, messages, map[string]any{})
+	f, _ := format.OpenAIFactory()
+	req := request.NewChat(provider, f, mdl, messages, map[string]any{})
 
 	_, err = c.Execute(context.Background(), req)
 	if err == nil {
@@ -347,8 +318,8 @@ func TestClient_ExecuteStream_UnsupportedProtocol(t *testing.T) {
 	}
 	c := client.New(cfg)
 
-	// Embeddings does not support streaming
-	req := request.NewEmbeddings(provider, mdl, "test", map[string]any{})
+	f, _ := format.OpenAIFactory()
+	req := request.NewEmbeddings(provider, f, mdl, "test", map[string]any{})
 
 	_, err = c.ExecuteStream(context.Background(), req)
 	if err == nil {

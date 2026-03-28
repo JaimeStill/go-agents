@@ -1,5 +1,66 @@
 # Changelog
 
+## [v0.5.0] - 2026-03-28
+
+**Breaking Changes**:
+- `Provider` interface: removed `Marshal()`, `ProcessResponse()`, `ProcessStreamResponse()` methods — wire format handling moved to `Format` interface
+- `Provider` interface: added `Stream() streaming.StreamReader` method for provider-specific streaming transport
+- `Request` interface: added `Format() format.Format` method
+- Request constructors (`NewChat`, `NewVision`, `NewTools`, `NewEmbeddings`) now require a `format.Format` parameter
+- `Agent.Vision()` and `Agent.VisionStream()` signature changed from `images []string` to `images []format.Image`
+- `Agent.Chat()`, `Agent.Vision()`, `Agent.Tools()` now return `*response.Response` instead of `*response.ChatResponse` / `*response.ToolsResponse`
+- `Agent.ChatStream()`, `Agent.VisionStream()` now return `<-chan *response.StreamingResponse` instead of `<-chan *response.StreamingChunk`
+- `response.ChatResponse`, `response.ToolsResponse`, `response.StreamingChunk` types removed — replaced by unified `response.Response` and `response.StreamingResponse` with content blocks
+- `response.EmbeddingsResponse` simplified — `Data []struct{...}` replaced by `Embeddings [][]float64`
+- `response.TokenUsage` field names changed: `PromptTokens` → `InputTokens`, `CompletionTokens` → `OutputTokens`
+- `DefaultProviderConfig()` no longer sets `BaseURL` — providers auto-construct defaults when `BaseURL` is empty
+
+**Added**:
+- `pkg/format` package for wire format abstraction
+  - `Format` interface with `Marshal()`, `Parse()`, `ParseStreamChunk()` methods
+  - `OpenAIFormat` implementation for OpenAI-compatible providers
+  - `ConverseFormat` implementation for AWS Bedrock Converse API
+  - `Image` type for provider-neutral image representation with raw bytes and format
+  - `ChatData`, `VisionData`, `ToolsData`, `EmbeddingsData` format input types
+  - `ToolDefinition` type (moved from `providers` package)
+  - Format registry with `Register()`, `Create()`, `ListFormats()`
+- `pkg/streaming` package for streaming transport abstraction
+  - `StreamReader` interface and `StreamLine` type
+  - `SSEReader` for Server-Sent Events (Ollama, Azure)
+  - `EventStreamReader` for AWS event stream binary framing (Bedrock)
+  - `SSEMedia` and `EventStreamMedia` content type constants
+- `pkg/providers/bedrock.go` — AWS Bedrock provider
+  - Converse API endpoint routing with model ID in URL path
+  - SigV4 request signing via `pkg/identities`
+  - Default, static, and profile authentication modes
+  - Auto-constructed base URL from region
+- `pkg/identities/aws.go` — AWS credential source
+  - `AWSAuthType` typed string enum (`AWSAuthDefault`, `AWSAuthStatic`, `AWSAuthProfile`)
+  - `AWSCredentialSource` with SigV4 signing via `SignRequest()`
+  - Default credential chain, static keys, and named profile support
+- `response.Response` — unified response type for Chat, Vision, and Tools protocols
+  - `ContentBlock` interface with `TextBlock` and `ToolUseBlock` implementations
+  - `Text()` method for concatenated text content
+  - `ToolCalls()` method for filtered tool use blocks
+- `response.StreamingResponse` — unified streaming chunk type with content blocks
+- `AgentConfig.Format` string field (defaults to `"openai"`)
+- `MockFormat` type in `pkg/mock` for testing format implementations
+
+**Changed**:
+- `BaseProvider` reduced to `Name()` and `BaseURL()` — marshaling removed
+- Ollama and Azure providers auto-construct default base URLs when not configured
+- `agent.New()` defaults format to `"openai"` when `AgentConfig.Format` is empty
+- Mock package helpers (`NewSimpleChatAgent`, `NewToolsAgent`, etc.) use content block response types
+- `tools/prompt-agent` updated for new response types and `format.Image`
+
+**Removed**:
+- `pkg/providers/data.go` — types moved to `pkg/format/data.go`
+- `pkg/providers/sse.go` — moved to `pkg/streaming/sse.go`
+- `response.ChatResponse`, `response.ToolsResponse`, `response.StreamingChunk` types
+- `response.ToolCall`, `response.ToolCallFunction` types (replaced by `response.ToolUseBlock`)
+- `response.Parse()`, `response.ParseStreamChunk()`, and all protocol-specific parse functions — parsing now handled by format implementations
+- `providers.ToolDefinition` (moved to `format.ToolDefinition`)
+
 ## [v0.4.0] - 2026-03-13
 
 **Breaking Changes**:

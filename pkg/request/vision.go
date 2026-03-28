@@ -1,6 +1,7 @@
 package request
 
 import (
+	"github.com/JaimeStill/go-agents/pkg/format"
 	"github.com/JaimeStill/go-agents/pkg/model"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
@@ -9,12 +10,13 @@ import (
 // VisionRequest represents a vision protocol request with image inputs.
 // Separates images and vision-specific options from model configuration options.
 type VisionRequest struct {
+	provider      providers.Provider
+	fmt           format.Format
+	model         *model.Model
 	messages      []protocol.Message
-	images        []string       // URLs or base64 data URIs
+	images        []format.Image // URLs or base64 data URIs
 	visionOptions map[string]any // Vision-specific options (e.g., detail: "high")
 	options       map[string]any // Model configuration options
-	provider      providers.Provider
-	model         *model.Model
 }
 
 // NewVision creates a new VisionRequest with the given components.
@@ -22,14 +24,23 @@ type VisionRequest struct {
 // Images are URLs or base64 data URIs to analyze.
 // VisionOptions are vision-specific settings (e.g., detail level).
 // Options specify model configuration (temperature, max_tokens, etc.).
-func NewVision(p providers.Provider, m *model.Model, messages []protocol.Message, images []string, visionOpts, opts map[string]any) *VisionRequest {
+func NewVision(
+	p providers.Provider,
+	f format.Format,
+	m *model.Model,
+	messages []protocol.Message,
+	images []format.Image,
+	visionOpts,
+	opts map[string]any,
+) *VisionRequest {
 	return &VisionRequest{
+		provider:      p,
+		fmt:           f,
+		model:         m,
 		messages:      messages,
 		images:        images,
 		visionOptions: visionOpts,
 		options:       opts,
-		provider:      p,
-		model:         m,
 	}
 }
 
@@ -47,7 +58,7 @@ func (r *VisionRequest) Headers() map[string]string {
 
 // Marshal delegates to the provider for provider-specific JSON formatting.
 func (r *VisionRequest) Marshal() ([]byte, error) {
-	return r.provider.Marshal(protocol.Vision, &providers.VisionData{
+	return r.fmt.Marshal(protocol.Vision, &format.VisionData{
 		Model:         r.model.Name,
 		Messages:      r.messages,
 		Images:        r.images,
@@ -59,6 +70,10 @@ func (r *VisionRequest) Marshal() ([]byte, error) {
 // Provider returns the provider for this request.
 func (r *VisionRequest) Provider() providers.Provider {
 	return r.provider
+}
+
+func (r *VisionRequest) Format() format.Format {
+	return r.fmt
 }
 
 // Model returns the model for this request.

@@ -12,6 +12,7 @@ import (
 type AgentConfig struct {
 	Name         string          `json:"name"`
 	SystemPrompt string          `json:"system_prompt,omitempty"`
+	Format       string          `json:"format,omitempty"`
 	Client       *ClientConfig   `json:"client,omitempty"`
 	Provider     *ProviderConfig `json:"provider"`
 	Model        *ModelConfig    `json:"model"`
@@ -22,6 +23,7 @@ func DefaultAgentConfig() AgentConfig {
 	return AgentConfig{
 		Name:         "default-agent",
 		SystemPrompt: "",
+		Format:       "openai",
 		Client:       DefaultClientConfig(),
 		Provider:     DefaultProviderConfig(),
 		Model:        DefaultModelConfig(),
@@ -37,6 +39,10 @@ func (c *AgentConfig) Merge(source *AgentConfig) {
 
 	if source.SystemPrompt != "" {
 		c.SystemPrompt = source.SystemPrompt
+	}
+
+	if source.Format != "" {
+		c.Format = source.Format
 	}
 
 	if source.Client != nil {

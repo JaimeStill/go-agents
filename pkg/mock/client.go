@@ -17,7 +17,7 @@ type MockClient struct {
 	// Configurable responses
 	executeResponse any
 	executeError    error
-	streamChunks    []*response.StreamingChunk
+	streamChunks    []*response.StreamingResponse
 	streamError     error
 	httpClient      *http.Client
 }
@@ -50,7 +50,7 @@ func WithExecuteResponse(response any, err error) MockClientOption {
 }
 
 // WithStreamResponse sets the chunks for ExecuteStream.
-func WithStreamResponse(chunks []*response.StreamingChunk, err error) MockClientOption {
+func WithStreamResponse(chunks []*response.StreamingResponse, err error) MockClientOption {
 	return func(m *MockClient) {
 		m.streamChunks = chunks
 		m.streamError = err
@@ -82,12 +82,12 @@ func (m *MockClient) Execute(ctx context.Context, req request.Request) (any, err
 }
 
 // ExecuteStream returns a channel with predetermined chunks.
-func (m *MockClient) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
+func (m *MockClient) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingResponse, error) {
 	if m.streamError != nil {
 		return nil, m.streamError
 	}
 
-	ch := make(chan *response.StreamingChunk, len(m.streamChunks))
+	ch := make(chan *response.StreamingResponse, len(m.streamChunks))
 	for _, chunk := range m.streamChunks {
 		ch <- chunk
 	}

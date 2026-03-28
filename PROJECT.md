@@ -75,7 +75,7 @@ The following capability formats are registered and functional:
 - ✅ Thread-safe capability format registry
 - ✅ HTTP transport layer with connection pooling, retries, and streaming
 - ✅ Human-readable configuration (duration strings, clear option structures)
-- ✅ Protocol-specific response types (ChatResponse, ToolsResponse, EmbeddingsResponse)
+- ✅ Unified response model with typed content blocks (Response, EmbeddingsResponse)
 - ✅ Command-line testing utility (tools/prompt-agent)
 
 ## MVP Completion

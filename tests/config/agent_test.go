@@ -59,12 +59,38 @@ func TestAgentConfig_Unmarshal(t *testing.T) {
 		t.Errorf("got provider name %s, want ollama", cfg.Provider.Name)
 	}
 
+	if cfg.Format != "" {
+		t.Errorf("got format %q, want empty (not specified in JSON)", cfg.Format)
+	}
+
 	if cfg.Model == nil {
 		t.Fatal("model is nil")
 	}
 
 	if cfg.Model.Name != "llama3.2:3b" {
 		t.Errorf("got model name %s, want llama3.2:3b", cfg.Model.Name)
+	}
+}
+
+func TestAgentConfig_Unmarshal_WithFormat(t *testing.T) {
+	jsonData := `{
+		"name": "test-agent",
+		"format": "converse",
+		"provider": {
+			"name": "bedrock"
+		},
+		"model": {
+			"name": "anthropic.claude-sonnet-4-6-v1"
+		}
+	}`
+
+	var cfg config.AgentConfig
+	if err := json.Unmarshal([]byte(jsonData), &cfg); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if cfg.Format != "converse" {
+		t.Errorf("got format %q, want %q", cfg.Format, "converse")
 	}
 }
 
@@ -142,6 +168,10 @@ func TestDefaultAgentConfig(t *testing.T) {
 
 	if cfg.Provider.Name != "ollama" {
 		t.Errorf("got provider name %s, want ollama", cfg.Provider.Name)
+	}
+
+	if cfg.Format != "openai" {
+		t.Errorf("got format %q, want %q", cfg.Format, "openai")
 	}
 
 	if cfg.Model == nil {
@@ -241,6 +271,30 @@ func TestAgentConfig_Merge(t *testing.T) {
 			},
 		},
 		{
+			name: "merge format",
+			base: &config.AgentConfig{
+				Format: "openai",
+			},
+			source: &config.AgentConfig{
+				Format: "converse",
+			},
+			expected: &config.AgentConfig{
+				Format: "converse",
+			},
+		},
+		{
+			name: "source empty format preserves base",
+			base: &config.AgentConfig{
+				Format: "openai",
+			},
+			source: &config.AgentConfig{
+				Format: "",
+			},
+			expected: &config.AgentConfig{
+				Format: "openai",
+			},
+		},
+		{
 			name: "source empty name preserves base",
 			base: &config.AgentConfig{
 				Name: "base-agent",
@@ -276,6 +330,10 @@ func TestAgentConfig_Merge(t *testing.T) {
 
 			if tt.base.SystemPrompt != tt.expected.SystemPrompt {
 				t.Errorf("got system_prompt %s, want %s", tt.base.SystemPrompt, tt.expected.SystemPrompt)
+			}
+
+			if tt.base.Format != tt.expected.Format {
+				t.Errorf("got format %s, want %s", tt.base.Format, tt.expected.Format)
 			}
 
 			if tt.expected.Client != nil {
@@ -418,6 +476,11 @@ func TestLoadAgentConfig_MergesWithDefaults(t *testing.T) {
 	// Should have default client
 	if cfg.Client == nil {
 		t.Fatal("client is nil")
+	}
+
+	// Should have default format
+	if cfg.Format != "openai" {
+		t.Errorf("got format %q, want openai (from defaults)", cfg.Format)
 	}
 
 	// Should have default provider

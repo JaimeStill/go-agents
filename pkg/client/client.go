@@ -32,7 +32,7 @@ type Client interface {
 	// Provider and model are obtained from the request.
 	// The channel is closed when streaming completes or context is cancelled.
 	// Returns an error if protocol doesn't support streaming or request fails.
-	ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error)
+	ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingResponse, error)
 
 	// IsHealthy returns the current health status of the client.
 	// Set to false after request failures, true after successful requests.
@@ -139,10 +139,16 @@ func (c *client) execute(ctx context.Context, req request.Request) (any, error) 
 	}
 
 	// Process response through provider
-	result, err := provider.ProcessResponse(ctx, resp, proto)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.setHealthy(false)
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	result, err := req.Format().Parse(proto, respBody)
+	if err != nil {
+		c.setHealthy(false)
+		return nil, fmt.Errorf("failed to parse respones: %w", err)
 	}
 
 	c.setHealthy(true)
@@ -152,7 +158,7 @@ func (c *client) execute(ctx context.Context, req request.Request) (any, error) 
 // ExecuteStream executes a streaming protocol request.
 // Provider and model are obtained from the request.
 // Verifies protocol supports streaming and executes streaming flow.
-func (c *client) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
+func (c *client) ExecuteStream(ctx context.Context, req request.Request) (<-chan *response.StreamingResponse, error) {
 	proto := req.Protocol()
 
 	// Verify protocol supports streaming
@@ -165,7 +171,7 @@ func (c *client) ExecuteStream(ctx context.Context, req request.Request) (<-chan
 
 // executeStream performs the streaming HTTP request.
 // Streaming requests are not retried - they fail immediately on error.
-func (c *client) executeStream(ctx context.Context, req request.Request) (<-chan *response.StreamingChunk, error) {
+func (c *client) executeStream(ctx context.Context, req request.Request) (<-chan *response.StreamingResponse, error) {
 	provider := req.Provider()
 	proto := req.Protocol()
 
@@ -216,27 +222,39 @@ func (c *client) executeStream(ctx context.Context, req request.Request) (<-chan
 		return nil, fmt.Errorf("streaming request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	// Process stream through provider
-	stream, err := provider.ProcessStreamResponse(ctx, resp, proto)
-	if err != nil {
-		c.setHealthy(false)
-		resp.Body.Close()
-		return nil, err
-	}
+	f := req.Format()
+	streamLines := provider.Stream().ReadStream(ctx, resp.Body)
 
 	// Convert provider stream to typed chunk stream
-	output := make(chan *response.StreamingChunk)
+	output := make(chan *response.StreamingResponse)
 	go func() {
 		defer close(output)
 		defer resp.Body.Close()
 
-		for data := range stream {
-			if chunk, ok := data.(*response.StreamingChunk); ok {
+		for line := range streamLines {
+			if line.Err != nil {
 				select {
-				case output <- chunk:
+				case output <- &response.StreamingResponse{Error: line.Err}:
 				case <-ctx.Done():
-					return
 				}
+				c.setHealthy(false)
+				return
+			}
+
+			if line.Done {
+				c.setHealthy(true)
+				return
+			}
+
+			chunk, err := f.ParseStreamChunk(proto, line.Data)
+			if err != nil || chunk == nil {
+				continue
+			}
+
+			select {
+			case output <- chunk:
+			case <-ctx.Done():
+				return
 			}
 		}
 		c.setHealthy(true)

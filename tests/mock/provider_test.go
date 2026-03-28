@@ -71,24 +71,6 @@ func TestMockProvider_PrepareRequest(t *testing.T) {
 	}
 }
 
-func TestMockProvider_Marshal(t *testing.T) {
-	expectedBody := []byte(`{"model":"test-model"}`)
-
-	provider := mock.NewMockProvider(
-		mock.WithMarshalResponse(expectedBody, nil),
-	)
-
-	body, err := provider.Marshal(protocol.Chat, nil)
-
-	if err != nil {
-		t.Fatalf("Marshal failed: %v", err)
-	}
-
-	if string(body) != string(expectedBody) {
-		t.Errorf("got body %q, want %q", string(body), string(expectedBody))
-	}
-}
-
 func TestMockProvider_BaseURL(t *testing.T) {
 	provider := mock.NewMockProvider(
 		mock.WithBaseURL("https://custom.api"),

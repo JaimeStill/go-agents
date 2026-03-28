@@ -12,10 +12,12 @@ type ProviderConfig struct {
 }
 
 // DefaultProviderConfig creates a ProviderConfig with Ollama defaults.
+// BaseURL is intentionally empty — providers auto-construct their default
+// base URL when not explicitly configured (e.g., Ollama defaults to
+// localhost:11434, Bedrock constructs from region).
 func DefaultProviderConfig() *ProviderConfig {
 	return &ProviderConfig{
 		Name:    "ollama",
-		BaseURL: "http://localhost:11434",
 		Options: make(map[string]any),
 	}
 }

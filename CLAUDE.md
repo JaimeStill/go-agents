@@ -34,13 +34,14 @@ Context documents fall into two categories:
 **Implementation Guides**: Active development documentation for features currently being implemented
 - Format: `_context/[feature-name].md`
 - Structure: Problem context, architecture approach, then comprehensive step-by-step code modifications based on current codebase
-- Implementation Strategy: Structure implementation in phases separating architectural preparation from feature development:
-  - **Preparation Phase**: Refactor existing code structure and interfaces without changing functionality
-  - **Feature Phase**: Add new capabilities on the prepared foundation
+- Implementation Strategy: Structure complex implementations into **stages**, each with its own step sequence starting at 1. This prevents step renumbering when inserting prerequisite work and provides clean separation between independent concerns:
+  - **Stage pattern**: Each stage has a clear purpose (e.g., "Extract Format Layer", "Response System Refactor", "Bedrock Provider Implementation")
+  - **Step sequences restart at 1** within each stage — inserting a new stage between existing ones doesn't cascade renumbering
+  - **Stages separate concerns**: Architectural refactoring, type system changes, and feature additions each get their own stage
   - This prevents mixing layout changes with feature additions, reducing complexity and debugging difficulty
 - Focus: Concrete implementation steps, file-by-file changes, code examples for actual modifications needed
 - Conclusion: Future extensibility examples separate from core implementation steps
-- Current example: `_context/protocol-centric-architecture.md`
+- Current example: `_context/aws-provider.md`
 
 **Development Summaries**: Historical documentation capturing completed development efforts
 - Format: `_context/.archive/[NN]-[completed-effort].md` where `NN` is the next numerical sequence.
@@ -127,6 +128,19 @@ All documentation should be written in a clear, objective, and factual manner wi
 
 **Example**: Instead of `config.Temperature` in base config causing issues with reasoning models, use `protocols.ExtractOption(options, "temperature", 0.7)` where OpenAI Standard supports it and OpenAI Reasoning ignores it.
 
+### Provider-Neutral Data Representation
+**Principle**: Intermediate data types shared across format implementations should represent data in its most natural, provider-neutral form. Optimize when there is a data transformation penalty (encoding/decoding, copying large buffers); do not optimize when the format layer is performing lightweight structural mapping of small metadata.
+
+**Rationale**: When intermediate types reflect one provider's wire format (e.g., images as base64 data URI strings because that's what OpenAI expects), other formats are forced into wasteful encode/decode round-trips. Provider-neutral types let each format consume data directly in the form it needs. However, not all cross-format differences warrant abstraction — structural mappings like separating system messages or wrapping text in content blocks are trivial operations that belong in the format layer.
+
+**Implementation**:
+- Design shared data types around what consumers naturally produce, not what any single provider expects
+- When a data type forces consumers to pre-process data in a lossy or expensive way, revisit the intermediate representation
+- Leave lightweight structural transformations (message routing, JSON field wrapping, option merging) to the format layer — that is its purpose
+- The signal to optimize is a data transformation penalty (encode then decode, allocate then discard); structural mapping of references and small metadata is not worth abstracting
+
+**Example**: Instead of `Images []string` containing base64 data URIs (forcing Converse to decode what the consumer already had as bytes), use `Images []Image` with raw bytes and format string. Each format handles the final encoding: OpenAI builds data URIs at marshal time, Converse uses bytes directly.
+
 ### Configuration and Validation Separation
 **Principle**: Configuration packages should handle structure, defaults, and serialization only. Validation of configuration contents is the responsibility of the consuming package.
 
@@ -190,10 +204,13 @@ All documentation should be written in a clear, objective, and factual manner wi
 - Package dependency layers (from low to high):
   - `pkg/config` (foundation-level, serves all layers)
   - `pkg/protocol` (protocol types and message structures)
-  - `pkg/response` (response parsing and types)
-  - `pkg/providers` (provider-specific implementations)
+  - `pkg/response` (response types with content blocks)
+  - `pkg/format` (format interface, data types, implementations, registry)
+  - `pkg/streaming` (streaming transport interface and implementations)
+  - `pkg/identities` (managed identity / credential sources)
+  - `pkg/providers` (provider implementations — transport/auth only)
   - `pkg/model` (model runtime type, depends on protocol)
-  - `pkg/request` (request interface and types, depends on model, protocol, providers)
+  - `pkg/request` (request interface and types, depends on model, protocol, format, providers)
   - `pkg/client` (client abstraction and HTTP orchestration)
   - `pkg/agent` (high-level agent functionality)
   - `pkg/mock` (mock implementations for testing)
@@ -217,13 +234,16 @@ All documentation should be written in a clear, objective, and factual manner wi
 **Example**: When refactoring architecture, update in this order:
 1. `pkg/config` (configuration structures if needed)
 2. `pkg/protocol` (foundational protocol types)
-3. `pkg/response` (response parsing types)
-4. `pkg/providers` (provider implementations)
-5. `pkg/model` (model runtime type)
-6. `pkg/request` (request interface and types)
-7. `pkg/client` (client orchestration)
-8. `pkg/agent` (high-level interface)
-9. `pkg/mock` (mock implementations)
+3. `pkg/response` (response types)
+4. `pkg/format` (format interface, data types, implementations)
+5. `pkg/streaming` (streaming transport)
+6. `pkg/identities` (credential sources)
+7. `pkg/providers` (provider implementations)
+8. `pkg/model` (model runtime type)
+9. `pkg/request` (request interface and types)
+10. `pkg/client` (client orchestration)
+11. `pkg/agent` (high-level interface)
+12. `pkg/mock` (mock implementations)
 
 ### Parameter Encapsulation
 **Principle**: If more than two parameters are needed for a function or method, encapsulate the parameters into a structure.

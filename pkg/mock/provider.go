@@ -2,13 +2,11 @@ package mock
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
-	"github.com/JaimeStill/go-agents/pkg/response"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 // MockProvider implements providers.Provider interface for testing.
@@ -17,16 +15,11 @@ type MockProvider struct {
 	baseURL  string
 	headers  map[string]string
 	endpoint string
+	stream   streaming.StreamReader
 
 	// Configurable responses
-	marshalResponse       []byte
-	marshalError          error
 	prepareResponse       *providers.Request
 	prepareError          error
-	processResponse       any
-	processError          error
-	streamChunks          []any
-	streamError           error
 	endpointError         error
 	setHeadersError       error
 	customEndpointMapping map[protocol.Protocol]string
@@ -39,6 +32,7 @@ func NewMockProvider(opts ...MockProviderOption) *MockProvider {
 		baseURL:               "http://mock-provider.local",
 		headers:               make(map[string]string),
 		endpoint:              "/mock/endpoint",
+		stream:                streaming.NewSSEReader(),
 		customEndpointMapping: make(map[protocol.Protocol]string),
 	}
 
@@ -87,35 +81,11 @@ func WithEndpointMapping(mapping map[protocol.Protocol]string) MockProviderOptio
 	}
 }
 
-// WithMarshalResponse sets the response for Marshal.
-func WithMarshalResponse(body []byte, err error) MockProviderOption {
-	return func(m *MockProvider) {
-		m.marshalResponse = body
-		m.marshalError = err
-	}
-}
-
 // WithPrepareResponse sets the response for PrepareRequest.
 func WithPrepareResponse(response *providers.Request, err error) MockProviderOption {
 	return func(m *MockProvider) {
 		m.prepareResponse = response
 		m.prepareError = err
-	}
-}
-
-// WithProcessResponse sets the response for ProcessResponse.
-func WithProcessResponse(response any, err error) MockProviderOption {
-	return func(m *MockProvider) {
-		m.processResponse = response
-		m.processError = err
-	}
-}
-
-// WithProviderStreamChunks sets the chunks for ProcessStreamResponse.
-func WithProviderStreamChunks(chunks []any, err error) MockProviderOption {
-	return func(m *MockProvider) {
-		m.streamChunks = chunks
-		m.streamError = err
 	}
 }
 
@@ -158,6 +128,10 @@ func (m *MockProvider) Endpoint(proto protocol.Protocol) (string, error) {
 	return m.baseURL + m.endpoint, nil
 }
 
+func (m *MockProvider) Stream() streaming.StreamReader {
+	return m.stream
+}
+
 // SetHeaders sets the configured headers on the request.
 func (m *MockProvider) SetHeaders(ctx context.Context, req *http.Request) error {
 	if m.setHeadersError != nil {
@@ -169,20 +143,6 @@ func (m *MockProvider) SetHeaders(ctx context.Context, req *http.Request) error 
 	}
 
 	return nil
-}
-
-// Marshal returns the predetermined marshaled body.
-func (m *MockProvider) Marshal(proto protocol.Protocol, data any) ([]byte, error) {
-	if m.marshalError != nil {
-		return nil, m.marshalError
-	}
-
-	if m.marshalResponse != nil {
-		return m.marshalResponse, nil
-	}
-
-	// Return empty JSON object as default
-	return []byte(`{}`), nil
 }
 
 // PrepareRequest returns the predetermined request.
@@ -212,44 +172,10 @@ func (m *MockProvider) PrepareStreamRequest(ctx context.Context, proto protocol.
 	}
 
 	// Add streaming headers
-	req.Headers["Accept"] = "text/event-stream"
+	req.Headers["Accept"] = streaming.SSEMedia
 	req.Headers["Cache-Control"] = "no-cache"
 
 	return req, nil
-}
-
-// ProcessResponse returns the predetermined response.
-func (m *MockProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
-	if m.processError != nil {
-		return nil, m.processError
-	}
-
-	if m.processResponse != nil {
-		return m.processResponse, nil
-	}
-
-	// Read response body and use protocol parsing
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return response.Parse(proto, body)
-}
-
-// ProcessStreamResponse returns a channel with predetermined chunks.
-func (m *MockProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
-	if m.streamError != nil {
-		return nil, m.streamError
-	}
-
-	ch := make(chan any, len(m.streamChunks))
-	for _, chunk := range m.streamChunks {
-		ch <- chunk
-	}
-	close(ch)
-
-	return ch, nil
 }
 
 // Verify MockProvider implements providers.Provider interface.
