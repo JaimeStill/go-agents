@@ -55,6 +55,32 @@ func TestCreate_Azure(t *testing.T) {
 	}
 }
 
+func TestCreate_Bedrock(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name: "bedrock",
+		Options: map[string]any{
+			"region":            "us-east-1",
+			"auth_type":         "static",
+			"access_key_id":     "AKIAIOSFODNN7EXAMPLE",
+			"secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		},
+	}
+
+	provider, err := providers.Create(cfg)
+
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if provider == nil {
+		t.Fatal("Create returned nil provider")
+	}
+
+	if provider.Name() != "bedrock" {
+		t.Errorf("got name %q, want %q", provider.Name(), "bedrock")
+	}
+}
+
 func TestCreate_UnknownProvider(t *testing.T) {
 	cfg := &config.ProviderConfig{
 		Name:    "unknown-provider",
@@ -87,5 +113,9 @@ func TestListProviders(t *testing.T) {
 
 	if !found["azure"] {
 		t.Error("azure provider not registered")
+	}
+
+	if !found["bedrock"] {
+		t.Error("bedrock provider not registered")
 	}
 }

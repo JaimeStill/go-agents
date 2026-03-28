@@ -6,41 +6,50 @@
 //
 // # Mock Implementations
 //
-// MockAgent: Implements agent.Agent interface with configurable protocol responses
+// MockAgent: Implements agent.Agent with configurable protocol responses.
 //
-// MockClient: Implements client.Client interface for client layer testing
+// MockClient: Implements client.Client for client layer testing.
 //
-// MockProvider: Implements providers.Provider interface with endpoint mapping
+// MockProvider: Implements providers.Provider with endpoint mapping and streaming.
+//
+// MockFormat: Implements format.Format for format layer testing.
 //
 // # Usage Example
 //
-//	// Create a mock agent with predetermined chat response
 //	mockAgent := mock.NewMockAgent(
-//	    mock.WithChatResponse(&types.ChatResponse{
-//	        Choices: []struct{ Message types.Message }{
-//	            {Message: types.NewMessage("assistant", "Test response")},
+//	    mock.WithChatResponse(&response.Response{
+//	        Role: "assistant",
+//	        Content: []response.ContentBlock{
+//	            response.TextBlock{Text: "Test response"},
 //	        },
-//	    }),
+//	    }, nil),
 //	)
 //
-//	// Use in tests
-//	response, err := mockAgent.Chat(context.Background(), "test prompt")
-//	// response contains the predetermined response
+//	resp, err := mockAgent.Chat(context.Background(), "test prompt")
+//	fmt.Println(resp.Text()) // "Test response"
 //
 // # Streaming Support
 //
-// Streaming methods return pre-populated channels that can be configured
-// with test chunks:
-//
 //	mockAgent := mock.NewMockAgent(
-//	    mock.WithStreamChunks([]types.StreamingChunk{
-//	        {Content: "chunk1"},
-//	        {Content: "chunk2"},
-//	    }),
+//	    mock.WithStreamChunks([]response.StreamingResponse{
+//	        {Content: []response.ContentBlock{response.TextBlock{Text: "chunk1"}}},
+//	        {Content: []response.ContentBlock{response.TextBlock{Text: "chunk2"}}},
+//	    }, nil),
 //	)
 //
 //	chunks, _ := mockAgent.ChatStream(context.Background(), "prompt")
 //	for chunk := range chunks {
-//	    // Process test chunks
+//	    fmt.Print(chunk.Text())
 //	}
+//
+// # Helper Constructors
+//
+// Convenience functions for common test scenarios:
+//
+//	agent := mock.NewSimpleChatAgent("id", "response text")
+//	agent := mock.NewStreamingChatAgent("id", []string{"chunk1", "chunk2"})
+//	agent := mock.NewToolsAgent("id", []response.ToolUseBlock{...})
+//	agent := mock.NewEmbeddingsAgent("id", []float64{0.1, 0.2, 0.3})
+//	agent := mock.NewMultiProtocolAgent("id")
+//	agent := mock.NewFailingAgent("id", errors.New("test error"))
 package mock

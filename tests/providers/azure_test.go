@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
+	"github.com/JaimeStill/go-agents/pkg/format"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 func TestNewAzure(t *testing.T) {
@@ -225,7 +227,12 @@ func TestAzure_PrepareRequest(t *testing.T) {
 		t.Fatalf("NewAzure failed: %v", err)
 	}
 
-	chatData := &providers.ChatData{
+	f, err := format.OpenAIFactory()
+	if err != nil {
+		t.Fatalf("OpenAIFactory failed: %v", err)
+	}
+
+	chatData := &format.ChatData{
 		Model: "gpt-4",
 		Messages: []protocol.Message{
 			protocol.NewMessage("user", "Hello"),
@@ -233,7 +240,7 @@ func TestAzure_PrepareRequest(t *testing.T) {
 		Options: map[string]any{},
 	}
 
-	body, err := provider.Marshal(protocol.Chat, chatData)
+	body, err := f.Marshal(protocol.Chat, chatData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
@@ -283,7 +290,12 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 		t.Fatalf("NewAzure failed: %v", err)
 	}
 
-	chatData := &providers.ChatData{
+	f, err := format.OpenAIFactory()
+	if err != nil {
+		t.Fatalf("OpenAIFactory failed: %v", err)
+	}
+
+	chatData := &format.ChatData{
 		Model: "gpt-4",
 		Messages: []protocol.Message{
 			protocol.NewMessage("user", "Hello"),
@@ -291,7 +303,7 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 		Options: map[string]any{"stream": true},
 	}
 
-	body, err := provider.Marshal(protocol.Chat, chatData)
+	body, err := f.Marshal(protocol.Chat, chatData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
@@ -310,12 +322,39 @@ func TestAzure_PrepareStreamRequest(t *testing.T) {
 		t.Fatal("PrepareStreamRequest returned nil request")
 	}
 
-	if request.Headers["Accept"] != "text/event-stream" {
-		t.Errorf("got Accept header %q, want %q", request.Headers["Accept"], "text/event-stream")
+	if request.Headers["Accept"] != streaming.SSEMedia {
+		t.Errorf("got Accept header %q, want %q", request.Headers["Accept"], streaming.SSEMedia)
 	}
 
 	if request.Headers["Cache-Control"] != "no-cache" {
 		t.Errorf("got Cache-Control header %q, want %q", request.Headers["Cache-Control"], "no-cache")
+	}
+}
+
+func TestAzure_Stream(t *testing.T) {
+	cfg := &config.ProviderConfig{
+		Name:    "azure",
+		BaseURL: "https://my-resource.openai.azure.com",
+		Options: map[string]any{
+			"deployment":  "gpt-4-deployment",
+			"auth_type":   "api_key",
+			"token":       "test-key",
+			"api_version": "2024-02-01",
+		},
+	}
+
+	provider, err := providers.NewAzure(cfg)
+	if err != nil {
+		t.Fatalf("NewAzure failed: %v", err)
+	}
+
+	stream := provider.Stream()
+	if stream == nil {
+		t.Fatal("Stream() returned nil")
+	}
+
+	if _, ok := stream.(*streaming.SSEReader); !ok {
+		t.Errorf("expected *streaming.SSEReader, got %T", stream)
 	}
 }
 

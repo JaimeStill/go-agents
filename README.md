@@ -2,7 +2,7 @@
 
 A platform and model agnostic Go agent primitive library.
 
-## Status: Pre-Release (v0.4.0)
+## Status: Pre-Release (v0.5.0)
 
 **go-agents** is currently in pre-release development. The API may change between minor versions until v1.0.0 is released.
 
@@ -14,28 +14,26 @@ A platform and model agnostic Go agent primitive library.
 
 ## Current Implementation
 
-The package provides a complete multi-protocol LLM integration system with a protocol-centric architecture:
+The package provides a complete multi-protocol LLM integration system with a layered architecture separating transport, wire format, and response concerns:
 
-- **Protocol-Specific Request Types**: Dedicated request types (ChatRequest, VisionRequest, ToolsRequest, EmbeddingsRequest) with protocol-appropriate fields
-- **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational with protocol-specific response types
-- **Multi-Provider Support**: Working Ollama and Azure AI Foundry providers with authentication (API keys, Entra ID)
-- **OpenAI Format Standard**: Tools wrapped in OpenAI format by default, vision images embedded in message content
-- **Configuration Option Merging**: Model configurations provide baseline defaults, runtime options override per request
-- **Structured Content Support**: Vision protocol handles multimodal content with vision-specific options, tools protocol returns structured tool calls
-- **Enhanced Development Tools**: Command-line testing infrastructure with comprehensive protocol examples
-- **Human-Readable Configuration**: Duration strings ("24s", "1m") and clean JSON configuration
-- **Thread-Safe Operations**: Proper connection pooling, streaming support (chat, vision, tools), and concurrent request handling
-- **Mock Implementations**: Complete mock package for testing agent-based systems
+- **Multi-Format Support**: Dedicated format layer (`pkg/format`) with OpenAI and AWS Bedrock Converse implementations. Formats handle request marshaling and response parsing independently of providers.
+- **Provider-Neutral Response Model**: Unified `Response` type with typed content blocks (`TextBlock`, `ToolUseBlock`). A single response type serves Chat, Vision, and Tools protocols.
+- **Multi-Provider Support**: Working Ollama, Azure AI Foundry, and AWS Bedrock providers with provider-specific authentication and streaming transport.
+- **Provider-Neutral Image Handling**: `format.Image` type carries raw bytes and format, avoiding encode/decode round-trips across formats.
+- **Streaming Transport Abstraction**: `pkg/streaming` package with `StreamReader` interface. SSE for OpenAI-compatible providers, AWS event stream for Bedrock.
+- **Complete Protocol Support**: All four core protocols (chat, vision, tools, embeddings) fully operational.
+- **Configuration Option Merging**: Model configurations provide baseline defaults, runtime options override per request.
+- **Human-Readable Configuration**: Duration strings ("24s", "1m"), flat agent config with `format` as a simple string field.
+- **Thread-Safe Operations**: Proper connection pooling, streaming support (chat, vision, tools), and concurrent request handling.
+- **Mock Implementations**: Complete mock package for testing agent-based systems.
 
 ## Development Status
 
-### Current Phase: v0.4.0 - Azure Managed Identity Support
+### Current Phase: v0.5.0 - Format Layer + AWS Bedrock Provider
 
-**Completed**: Added `pkg/identities` package isolating Azure SDK dependencies. Azure provider now supports `managed_identity` auth type for containerized deployments alongside existing `api_key` and `bearer` authentication. `Provider.SetHeaders` interface updated to accept `context.Context` and return `error` for dynamic token acquisition.
+**Completed**: Extracted wire formatting from providers into a dedicated `pkg/format` package. Replaced OpenAI-shaped response types with a provider-neutral content block model. Added `pkg/streaming` package for transport abstraction. Added AWS Bedrock provider with Converse API format, SigV4 authentication, and event stream support.
 
-**Active Focus**: The system is stable and ready for use. Architecture simplified with clear separation between protocol, response, and configuration concerns.
-
-**Architecture Highlights**: Flattened configuration structure, dedicated protocol and response packages, provider-owned request marshaling, managed identity support for Azure containerized deployments, clean separation between HTTP client settings and LLM configuration.
+**Architecture Highlights**: Three-layer separation (transport → format → response), provider-neutral `Image` type, unified `Response` with content blocks, streaming transport as a first-class abstraction, format registry parallel to provider registry.
 
 ## Getting Started
 
@@ -316,6 +314,64 @@ For containerized applications running in Azure (App Service, Container Apps, AK
 > **Azure Base URL**: For Azure OpenAI-kind Cognitive Services accounts, the `base_url` must include the `/openai` path segment (e.g., `https://my-service.openai.azure.com/openai`). AIServices-kind accounts that expose a unified endpoint do not require this suffix. If you receive HTTP 404 errors from Azure, verify your account kind and adjust the base URL accordingly.
 
 See [scripts/azure/README.md](./scripts/azure/README.md) for full documentation on Azure scripts.
+
+#### Test with AWS Bedrock
+
+Requires AWS credentials configured via `aws configure` or environment variables. Uses cross-region inference profiles.
+
+```sh
+go run tools/prompt-agent/main.go \
+  -config tools/prompt-agent/config.bedrock-haiku.json \
+  -prompt "In 300 words or less, describe the Go programming language"
+```
+
+<details>
+  <summary>Configuration</summary>
+
+  ```json
+  {
+    "name": "bedrock-haiku",
+    "system_prompt": "You are a helpful assistant.",
+    "provider": {
+      "name": "bedrock",
+      "options": {
+        "region": "us-east-2",
+        "auth_type": "default"
+      }
+    },
+    "format": "converse",
+    "model": {
+      "name": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "capabilities": {
+        "chat": {
+          "inferenceConfig": {
+            "maxTokens": 1024,
+            "temperature": 0.7
+          }
+        },
+        "vision": {
+          "inferenceConfig": {
+            "maxTokens": 1024
+          }
+        },
+        "tools": {
+          "inferenceConfig": {
+            "maxTokens": 1024
+          }
+        }
+      }
+    }
+  }
+  ```
+
+</details>
+
+**Bedrock authentication options:**
+- `auth_type: "default"` — AWS default credential chain (env vars, `~/.aws/credentials`, instance roles)
+- `auth_type: "static"` — Explicit `access_key_id`, `secret_access_key`, optional `session_token`
+- `auth_type: "profile"` — Named AWS profile via `profile` option
+
+> **Model IDs**: Bedrock requires cross-region inference profile IDs (e.g., `us.anthropic.claude-haiku-4-5-20251001-v1:0`) rather than base model IDs. List available profiles with `aws bedrock list-inference-profiles --region <region>`.
 
 #### Vision Protocol (Local Image)
 

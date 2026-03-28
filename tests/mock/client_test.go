@@ -17,16 +17,17 @@ func TestNewMockClient(t *testing.T) {
 }
 
 func TestMockClient_Execute(t *testing.T) {
-	expectedResponse := &response.ChatResponse{
-		Model: "test-model",
+	expectedResponse := &response.Response{
+		Role: "assistant",
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Hello"},
+		},
 	}
 
 	client := mock.NewMockClient(
 		mock.WithExecuteResponse(expectedResponse, nil),
 	)
 
-	// MockClient.Execute takes a request.Request, but we can test
-	// with the mock's configured response
 	result, err := client.Execute(context.Background(), nil)
 
 	if err != nil {
@@ -39,21 +40,13 @@ func TestMockClient_Execute(t *testing.T) {
 }
 
 func TestMockClient_ExecuteStream(t *testing.T) {
-	// Create properly typed StreamingChunk
-	chunk := &response.StreamingChunk{
-		Model: "test-model",
+	chunk := &response.StreamingResponse{
+		Content: []response.ContentBlock{
+			response.TextBlock{Text: "Hello"},
+		},
 	}
-	chunk.Choices = make([]struct {
-		Index int `json:"index"`
-		Delta struct {
-			Role    string `json:"role,omitempty"`
-			Content string `json:"content,omitempty"`
-		} `json:"delta"`
-		FinishReason *string `json:"finish_reason"`
-	}, 1)
-	chunk.Choices[0].Delta.Content = "Hello"
 
-	chunks := []*response.StreamingChunk{chunk}
+	chunks := []*response.StreamingResponse{chunk}
 
 	client := mock.NewMockClient(
 		mock.WithStreamResponse(chunks, nil),

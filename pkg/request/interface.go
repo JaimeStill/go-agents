@@ -1,6 +1,7 @@
 package request
 
 import (
+	"github.com/JaimeStill/go-agents/pkg/format"
 	"github.com/JaimeStill/go-agents/pkg/model"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
 	"github.com/JaimeStill/go-agents/pkg/providers"
@@ -21,6 +22,9 @@ type Request interface {
 
 	// Provider returns the provider for this request.
 	Provider() providers.Provider
+
+	// Format returns the format for this request.
+	Format() format.Format
 
 	// Model returns the model for this request.
 	Model() *model.Model

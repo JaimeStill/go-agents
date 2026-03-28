@@ -1,18 +1,15 @@
 package providers
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
-	"strings"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
 	"github.com/JaimeStill/go-agents/pkg/identities"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
-	"github.com/JaimeStill/go-agents/pkg/response"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 // AzureProvider implements Provider for Azure OpenAI Service.
@@ -25,6 +22,7 @@ type AzureProvider struct {
 	token       string
 	apiVersion  string
 	tokenSource *identities.AzureTokenSource
+	stream      streaming.StreamReader
 }
 
 // NewAzure creates a new AzureProvider from configuration.
@@ -54,6 +52,7 @@ func NewAzure(c *config.ProviderConfig) (Provider, error) {
 		deployment:   deployment,
 		authType:     authType,
 		apiVersion:   apiVersion,
+		stream:       streaming.NewSSEReader(),
 	}
 
 	if err := p.initAuth(c); err != nil {
@@ -86,6 +85,11 @@ func (p *AzureProvider) Endpoint(proto protocol.Protocol) (string, error) {
 	return fmt.Sprintf("%s%s?api-version=%s", p.BaseURL(), endpoint, p.apiVersion), nil
 }
 
+// Stream returns the SSE reader for Azure streaming responses.
+func (p *AzureProvider) Stream() streaming.StreamReader {
+	return p.stream
+}
+
 // PrepareRequest prepares a standard (non-streaming) Azure request.
 // Returns an error if the endpoint is invalid.
 func (p *AzureProvider) PrepareRequest(ctx context.Context, proto protocol.Protocol, body []byte, headers map[string]string) (*Request, error) {
@@ -113,7 +117,7 @@ func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, proto protocol
 	// Clone headers to avoid mutating the original
 	streamHeaders := make(map[string]string)
 	maps.Copy(streamHeaders, headers)
-	streamHeaders["Accept"] = "text/event-stream"
+	streamHeaders["Accept"] = streaming.SSEMedia
 	streamHeaders["Cache-Control"] = "no-cache"
 
 	return &Request{
@@ -121,88 +125,6 @@ func (p *AzureProvider) PrepareStreamRequest(ctx context.Context, proto protocol
 		Headers: streamHeaders,
 		Body:    body,
 	}, nil
-}
-
-// ProcessResponse processes a standard Azure HTTP response.
-// Returns an error if the HTTP status is not OK.
-// Uses response.Parse for protocol-aware parsing.
-func (p *AzureProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return response.Parse(proto, body)
-}
-
-// ProcessStreamResponse processes a streaming Azure HTTP response with SSE format.
-// Azure uses "data: " prefix for server-sent events.
-// Returns a channel that emits parsed streaming chunks.
-// The channel is closed when the stream completes or context is cancelled.
-// Returns an error if the HTTP status is not OK.
-func (p *AzureProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
-	}
-
-	output := make(chan any)
-
-	go func() {
-		defer close(output)
-		defer resp.Body.Close()
-
-		reader := bufio.NewReader(resp.Body)
-
-		for {
-			line, err := reader.ReadString('\n')
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				select {
-				case output <- &response.StreamingChunk{Error: err}:
-				case <-ctx.Done():
-				}
-				return
-			}
-
-			line = strings.TrimSpace(line)
-
-			if line == "" {
-				continue
-			}
-
-			if !strings.HasPrefix(line, "data: ") {
-				continue
-			}
-
-			data := strings.TrimPrefix(line, "data: ")
-
-			// Check for stream completion marker
-			if data == "[DONE]" {
-				return
-			}
-
-			chunk, err := response.ParseStreamChunk(proto, []byte(data))
-			if err != nil {
-				continue
-			}
-
-			select {
-			case output <- chunk:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return output, nil
 }
 
 // SetHeaders sets authentication headers on the HTTP request.

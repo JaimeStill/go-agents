@@ -1,17 +1,15 @@
 package providers
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
 	"strings"
 
 	"github.com/JaimeStill/go-agents/pkg/config"
 	"github.com/JaimeStill/go-agents/pkg/protocol"
-	"github.com/JaimeStill/go-agents/pkg/response"
+	"github.com/JaimeStill/go-agents/pkg/streaming"
 )
 
 // OllamaProvider implements Provider for Ollama services with OpenAI-compatible API.
@@ -19,6 +17,7 @@ import (
 type OllamaProvider struct {
 	*BaseProvider
 	options map[string]any
+	stream  streaming.StreamReader
 }
 
 // NewOllama creates a new OllamaProvider from configuration.
@@ -26,6 +25,9 @@ type OllamaProvider struct {
 // Supports optional authentication via "auth_type" and "token" options.
 func NewOllama(c *config.ProviderConfig) (Provider, error) {
 	baseURL := c.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
+	}
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL = strings.TrimSuffix(baseURL, "/") + "/v1"
 	}
@@ -33,6 +35,7 @@ func NewOllama(c *config.ProviderConfig) (Provider, error) {
 	return &OllamaProvider{
 		BaseProvider: NewBaseProvider(c.Name, baseURL),
 		options:      c.Options,
+		stream:       streaming.NewSSEReader(),
 	}, nil
 }
 
@@ -53,6 +56,11 @@ func (p *OllamaProvider) Endpoint(proto protocol.Protocol) (string, error) {
 	}
 
 	return fmt.Sprintf("%s%s", p.BaseURL(), endpoint), nil
+}
+
+// Stream returns the SSE reader for Ollama streaming responses.
+func (p *OllamaProvider) Stream() streaming.StreamReader {
+	return p.stream
 }
 
 // PrepareRequest prepares a standard (non-streaming) Ollama request.
@@ -82,7 +90,7 @@ func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, proto protoco
 	// Clone headers to avoid mutating the original
 	streamHeaders := make(map[string]string)
 	maps.Copy(streamHeaders, headers)
-	streamHeaders["Accept"] = "text/event-stream"
+	streamHeaders["Accept"] = streaming.SSEMedia
 	streamHeaders["Cache-Control"] = "no-cache"
 
 	return &Request{
@@ -92,87 +100,7 @@ func (p *OllamaProvider) PrepareStreamRequest(ctx context.Context, proto protoco
 	}, nil
 }
 
-// ProcessResponse processes a standard Ollama HTTP response.
-// Returns an error if the HTTP status is not OK.
-// Uses response.Parse for protocol-aware parsing.
-func (p *OllamaProvider) ProcessResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (any, error) {
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return response.Parse(proto, body)
-}
-
-// ProcessStreamResponse processes a streaming Ollama HTTP response.
-// Ollama uses SSE format with "data: " prefix.
-// Returns a channel that emits parsed streaming chunks.
-// The channel is closed when the stream completes or context is cancelled.
-// Returns an error if the HTTP status is not OK.
-func (p *OllamaProvider) ProcessStreamResponse(ctx context.Context, resp *http.Response, proto protocol.Protocol) (<-chan any, error) {
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
-	}
-
-	output := make(chan any)
-
-	go func() {
-		defer close(output)
-		defer resp.Body.Close()
-
-		reader := bufio.NewReader(resp.Body)
-
-		for {
-			line, err := reader.ReadString('\n')
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				select {
-				case output <- &response.StreamingChunk{Error: err}:
-				case <-ctx.Done():
-				}
-				return
-			}
-
-			line = strings.TrimSpace(line)
-
-			if line == "" {
-				continue
-			}
-
-			// Check for completion marker
-			if line == "data: [DONE]" {
-				return
-			}
-
-			// Strip SSE "data: " prefix
-			if after, ok := strings.CutPrefix(line, "data: "); ok {
-				line = after
-			}
-
-			chunk, err := response.ParseStreamChunk(proto, []byte(line))
-			if err != nil {
-				continue
-			}
-
-			select {
-			case output <- chunk:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return output, nil
-}
-
+// SetHeaders sets optional authentication headers based on provider options.
 func (p *OllamaProvider) SetHeaders(ctx context.Context, req *http.Request) error {
 	if authType, ok := p.options["auth_type"].(string); ok {
 		if token, ok := p.options["token"].(string); ok && token != "" {
